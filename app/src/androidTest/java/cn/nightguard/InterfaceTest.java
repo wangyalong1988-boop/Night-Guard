@@ -32,8 +32,13 @@ public class InterfaceTest {
             scenario.onActivity(a->{new Store(a).p.edit().remove("apps").remove("pending").apply();a.showEntries(fixtures());});
             scenario.onActivity(a->{View title=findText(a.getWindow().getDecorView(),"限制应用");android.graphics.Rect bounds=new android.graphics.Rect();assertNotNull(title);assertTrue("Picker title is visible",title.getGlobalVisibleRect(bounds)&&bounds.width()>0);});
             capture("apps-all.png");
-            scenario.onActivity(a->{View search=findDescription(a.getWindow().getDecorView(),"搜索应用");search.requestFocus();a.getSystemService(android.view.inputmethod.InputMethodManager.class).showSoftInput(search,android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT);});
-            settle();Thread.sleep(500);
+            int[] tap=new int[2];
+            scenario.onActivity(a->{View search=findDescription(a.getWindow().getDecorView(),"搜索应用");android.graphics.Rect rect=new android.graphics.Rect();assertTrue(search.getGlobalVisibleRect(rect));tap[0]=rect.centerX();tap[1]=rect.centerY();});
+            long eventTime=android.os.SystemClock.uptimeMillis();
+            InstrumentationRegistry.getInstrumentation().sendPointerSync(android.view.MotionEvent.obtain(eventTime,eventTime,android.view.MotionEvent.ACTION_DOWN,tap[0],tap[1],0));
+            InstrumentationRegistry.getInstrumentation().sendPointerSync(android.view.MotionEvent.obtain(eventTime,eventTime+50,android.view.MotionEvent.ACTION_UP,tap[0],tap[1],0));
+            boolean[] imeVisible={false};long imeDeadline=android.os.SystemClock.elapsedRealtime()+5000;
+            while(!imeVisible[0]&&android.os.SystemClock.elapsedRealtime()<imeDeadline){settle();scenario.onActivity(a->imeVisible[0]=a.getWindow().getDecorView().getRootWindowInsets().isVisible(WindowInsets.Type.ime()));}
             scenario.onActivity(a->{assertTrue("Software keyboard is actually visible",a.getWindow().getDecorView().getRootWindowInsets().isVisible(WindowInsets.Type.ime()));android.graphics.Rect bounds=new android.graphics.Rect();View save=findText(a.getWindow().getDecorView(),"保存限制清单");assertTrue("Save remains visible with keyboard",save.getGlobalVisibleRect(bounds)&&bounds.height()>0);ListView list=findList(a.getWindow().getDecorView());assertNotNull(list);assertTrue("Search results retain usable space",list.getHeight()>=BlueUi.dp(a,70));});
             capture("apps-keyboard.png");
             scenario.onActivity(a->a.getSystemService(android.view.inputmethod.InputMethodManager.class).hideSoftInputFromWindow(a.getWindow().getDecorView().getWindowToken(),0));
