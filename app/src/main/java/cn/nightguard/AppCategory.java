@@ -15,7 +15,7 @@ final class AppCategory {
     private static void add(String group,String... packages) { for(String pkg:packages)KNOWN.put(pkg,group); }
     static String classify(String pkg,int systemCategory,boolean browser,String override) {
         if(browser)return BROWSER;
-        if(CATEGORIES.contains(override)&&!BROWSER.equals(override))return override;
+        if(override!=null&&CATEGORIES.contains(override)&&!BROWSER.equals(override))return override;
         if(KNOWN.containsKey(pkg))return KNOWN.get(pkg);
         // Android ApplicationInfo category constants: game=0, audio=1, video=2, image=3.
         switch(systemCategory) {
