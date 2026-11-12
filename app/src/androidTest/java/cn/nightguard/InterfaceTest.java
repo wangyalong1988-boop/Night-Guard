@@ -66,12 +66,17 @@ public class InterfaceTest {
     private static void capture(String name)throws Exception{
         InstrumentationRegistry.getInstrumentation().waitForIdleSync();Thread.sleep(350);
         // Gradle removes the tested APK after the suite; export as shell-owned files first.
-        try(android.os.ParcelFileDescriptor descriptor=InstrumentationRegistry.getInstrumentation().getUiAutomation()
-                .executeShellCommand("screencap -p /data/local/tmp/nightguard-"+name+" && echo captured");
+        String path="/data/local/tmp/nightguard-"+name;
+        shell("screencap -p "+path);
+        byte[] bytes=shell("cat "+path);
+        assertTrue("Screenshot is a PNG",bytes.length>8&&bytes[0]==(byte)0x89&&bytes[1]=='P'&&bytes[2]=='N'&&bytes[3]=='G');
+    }
+    private static byte[] shell(String command)throws Exception{
+        try(android.os.ParcelFileDescriptor descriptor=InstrumentationRegistry.getInstrumentation().getUiAutomation().executeShellCommand(command);
             InputStream in=new android.os.ParcelFileDescriptor.AutoCloseInputStream(descriptor)){
-            ByteArrayOutputStream output=new ByteArrayOutputStream();byte[] buffer=new byte[1024];int count;
+            ByteArrayOutputStream output=new ByteArrayOutputStream();byte[] buffer=new byte[4096];int count;
             while((count=in.read(buffer))!=-1)output.write(buffer,0,count);
-            assertTrue("Screenshot export completes",output.toString().contains("captured"));
+            return output.toByteArray();
         }
     }
     private static View findText(View view,String text){if(view instanceof TextView&&((TextView)view).getText().toString().equals(text))return view;return children(view,v->findText(v,text));}
