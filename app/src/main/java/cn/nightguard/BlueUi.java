@@ -66,14 +66,14 @@ final class BlueUi {
 
     static void page(Activity activity, View body) {
         Window w = activity.getWindow();
+        body.setBackgroundColor(PAGE); activity.setContentView(body); // creates the decor view; the insets controller needs it
         w.setDecorFitsSystemWindows(false); w.setStatusBarColor(Color.TRANSPARENT); w.setNavigationBarColor(Color.TRANSPARENT);
-        WindowInsetsController bars = w.getInsetsController();
+        w.getDecorView().setBackgroundColor(PAGE);
+        WindowInsetsController bars = w.getDecorView().getWindowInsetsController();
         if (bars != null) {
             int light = WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS | WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS;
             bars.setSystemBarsAppearance(dark ? 0 : light, light);
         }
-        w.getDecorView().setBackgroundColor(PAGE);
-        body.setBackgroundColor(PAGE); activity.setContentView(body);
         body.setOnApplyWindowInsetsListener((v, insets) -> {
             Insets i = insets.getInsets(WindowInsets.Type.systemBars() | WindowInsets.Type.ime());
             v.setPadding(i.left, i.top, i.right, i.bottom); return WindowInsets.CONSUMED;
@@ -147,6 +147,23 @@ final class BlueUi {
                 if (i == 0) path.moveTo(x, y); else path.lineTo(x, y);
             }
             path.close();
+        }
+    }
+
+    /** Today's use against the goal. Past the goal the bar stays full and the overflow shows in amber at the end. */
+    static final class Meter extends View {
+        private final Paint p = new Paint(Paint.ANTI_ALIAS_FLAG); private double used, goal;
+        Meter(Context c) { super(c); setImportantForAccessibility(IMPORTANT_FOR_ACCESSIBILITY_NO); }
+        void set(double used, double goal) { this.used = used; this.goal = goal; invalidate(); }
+        @Override protected void onDraw(Canvas c) {
+            float w = getWidth(), h = getHeight(), r = h / 2;
+            p.setColor(LINE); c.drawRoundRect(0, 0, w, h, r, r, p);
+            if (goal <= 0) return;
+            double f = used / goal;
+            if (f <= 1) { p.setColor(BLUE); if (f > 0) c.drawRoundRect(0, 0, Math.max(h, (float) (w * f)), h, r, r, p); return; }
+            float split = (float) (w / f); // where the goal sits on a bar scaled to today's use
+            p.setColor(BLUE); c.drawRoundRect(0, 0, w, h, r, r, p);
+            c.save(); c.clipRect(split + 2 * getResources().getDisplayMetrics().density, 0, w, h); p.setColor(STAR); c.drawRoundRect(0, 0, w, h, r, r, p); c.restore();
         }
     }
 
