@@ -1,0 +1,1 @@
+<resources><string name="service_description">在每天01:00至08:00根据前台应用包名拦截您选择的应用和浏览器。不读取屏幕文字、网页正文或聊天内容。请先在夜间守护中选择应用；可随时在系统设置撤销权限。</string></resources>
