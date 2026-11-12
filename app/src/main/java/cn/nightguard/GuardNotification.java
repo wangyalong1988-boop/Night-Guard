@@ -14,7 +14,9 @@ final class GuardNotification {
     private long lastBoundary = -1, lastPost = -60000;
     GuardNotification(Context context) { this.context = context; }
     static boolean permitted(Context c) {
-        return (Build.VERSION.SDK_INT < 33 || c.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED)
+        NotificationManager manager=c.getSystemService(NotificationManager.class);
+        NotificationChannel channel=manager.getNotificationChannel(CHANNEL);
+        return (channel==null||channel.getImportance()!=NotificationManager.IMPORTANCE_NONE) && (Build.VERSION.SDK_INT < 33 || c.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED)
                 && c.getSystemService(NotificationManager.class).areNotificationsEnabled();
     }
     void refresh() {

@@ -14,6 +14,7 @@ final class Store {
   if(p.contains("pending") && System.currentTimeMillis()>=p.getLong("pendingAt",Long.MAX_VALUE)) { Set<String> pending=new HashSet<>(p.getStringSet("pending",Set.of())); p.edit().putStringSet("apps",pending).remove("pending").remove("pendingAt").commit(); }
   return new HashSet<>(p.getStringSet("apps",Set.of()));
  }
+ Set<String> desired(){ selected(); return new HashSet<>(p.getStringSet(p.contains("pending")?"pending":"apps",Set.of())); }
  void save(Set<String> apps){ if(night()) { Set<String> immediate=selected(); immediate.addAll(apps); long at=java.time.ZonedDateTime.now().withHour(8).withMinute(0).withSecond(0).withNano(0).toInstant().toEpochMilli(); p.edit().putStringSet("apps",immediate).putStringSet("pending",new HashSet<>(apps)).putLong("pendingAt",at).commit(); } else p.edit().putStringSet("apps",new HashSet<>(apps)).remove("pending").remove("pendingAt").commit(); }
  boolean allowed(String pkg){ return Policy.granted(pkg,p.getString("grant",null),p.getLong("until",0),SystemClock.elapsedRealtime()); }
  void begin(String pkg, String reason){ p.edit().putString("request",pkg).putString("reason",reason).putLong("start",SystemClock.elapsedRealtime()).putString("phrase","我选择暂时使用并在五分钟后停止 " + String.format(java.util.Locale.ROOT,"%06d",new java.security.SecureRandom().nextInt(1000000))).commit(); }

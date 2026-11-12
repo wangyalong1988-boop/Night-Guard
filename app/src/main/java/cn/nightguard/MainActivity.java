@@ -10,121 +10,91 @@ import android.view.*;
 import android.widget.*;
 import android.graphics.Color;
 import android.graphics.Typeface;
-import android.graphics.drawable.GradientDrawable;
 import java.time.*;
 import java.util.*;
+import java.util.concurrent.*;
 
 public class MainActivity extends Activity {
-    private Store store;
-    private LinearLayout root, section;
-    private TextView countdown, stage;
-    private BlueUi.Dial dial;
+    private Store store;private LinearLayout root,section,preview;private TextView countdown,clock,phase,appSummary,badge;
     private String target;
-    private final Handler handler = new Handler(Looper.getMainLooper());
-    private final Runnable timer = new Runnable() {
-        public void run() {
-            if (countdown != null) refreshCountdown();
-            refreshDial();
-            handler.postDelayed(this, 1000);
+    private final ExecutorService loader=Executors.newSingleThreadExecutor();
+    private final Handler handler=new Handler(Looper.getMainLooper());
+    private final Runnable timer=new Runnable(){public void run(){if(countdown!=null)refreshCountdown();refreshClock();handler.postDelayed(this,1000);}};
+    private int dp(float value){return BlueUi.dp(this,value);}
+    @Override public void onCreate(Bundle state){super.onCreate(state);store=new Store(this);}
+    @Override public void onNewIntent(Intent intent){super.onNewIntent(intent);setIntent(intent);render();}
+    @Override public void onResume(){super.onResume();GuardService.settingsVisible=true;render();handler.removeCallbacks(timer);handler.post(timer);}
+    @Override public void onPause(){GuardService.settingsVisible=false;handler.removeCallbacks(timer);super.onPause();}
+    @Override public void onDestroy(){loader.shutdownNow();handler.removeCallbacks(timer);super.onDestroy();}
+    private TextView text(String value,int size){TextView t=BlueUi.label(this,value,size,size>=18?BlueUi.INK:BlueUi.MUTED,size>=18);section.addView(t);BlueUi.gap(section,10);return t;}
+    private void button(String value,boolean primary,Runnable action){BlueUi.gap(section,10);section.addView(BlueUi.button(this,value,primary,action),new LinearLayout.LayoutParams(-1,-2));}
+    private void card(){
+        section=BlueUi.column(this);section.setPadding(dp(18),dp(18),dp(18),dp(18));section.setBackground(BlueUi.background(this,Color.WHITE,0,18));
+        LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,-2);lp.topMargin=dp(14);root.addView(section,lp);
+    }
+    private EditText input(String hint){
+        EditText e=new EditText(this);e.setHint(hint);e.setTextSize(15);e.setTextColor(BlueUi.INK);e.setHintTextColor(BlueUi.MUTED);
+        e.setPadding(dp(14),dp(14),dp(14),dp(14));e.setBackground(BlueUi.background(this,BlueUi.PAGE,BlueUi.LINE,10));section.addView(e);return e;
+    }
+    private boolean guardEnabled(){String enabled=Settings.Secure.getString(getContentResolver(),Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES);return enabled!=null&&enabled.contains(getPackageName()+"/");}
+    private void render(){
+        countdown=null;ScrollView scroll=new ScrollView(this);scroll.setFillViewport(true);scroll.setClipToPadding(false);BlueUi.page(this,scroll);
+        root=BlueUi.column(this);root.setPadding(dp(22),dp(24),dp(22),dp(24));scroll.addView(root);section=root;
+        LinearLayout header=BlueUi.row(this);LinearLayout titles=BlueUi.column(this);
+        titles.addView(BlueUi.label(this,"夜间守护",26,BlueUi.INK,true));BlueUi.gap(titles,7);titles.addView(BlueUi.label(this,"计划、应用与守护状态",12,BlueUi.MUTED,false));
+        header.addView(titles,new LinearLayout.LayoutParams(0,-2,1));badge=BlueUi.label(this,"",11,BlueUi.BLUE,true);badge.setPadding(dp(10),dp(6),dp(10),dp(6));badge.setBackground(BlueUi.background(this,BlueUi.PALE,0,8));header.addView(badge);root.addView(header);
+        target=getIntent().getStringExtra("target");if(target==null)target=store.p.getString("request",null);if(target!=null&&!Apps.safe(this,target))renderUnlock();
+        card();section.setBackground(BlueUi.background(this,0xffdfeafa,0,18));
+        LinearLayout heroHead=BlueUi.row(this);heroHead.addView(BlueUi.label(this,"每日限制时段",13,BlueUi.BLUE,true),new LinearLayout.LayoutParams(0,-2,1));heroHead.addView(new BlueUi.Glyph(this,"moon",BlueUi.BLUE),new LinearLayout.LayoutParams(dp(22),dp(22)));section.addView(heroHead);BlueUi.gap(section,20);
+        TextView schedule=BlueUi.label(this,"01:00  –  08:00",32,BlueUi.INK,true);schedule.setTypeface(Typeface.create("sans-serif",Typeface.NORMAL));section.addView(schedule);BlueUi.gap(section,14);
+        LinearLayout timeline=BlueUi.row(this);View blue=new View(this);blue.setBackground(BlueUi.background(this,BlueUi.BLUE,0,2));timeline.addView(blue,new LinearLayout.LayoutParams(0,dp(3),7));View pale=new View(this);pale.setBackgroundColor(0xffc9d9ee);timeline.addView(pale,new LinearLayout.LayoutParams(0,dp(3),3));section.addView(timeline);BlueUi.gap(section,14);
+        LinearLayout counter=BlueUi.row(this);phase=BlueUi.label(this,"",12,BlueUi.MUTED,false);counter.addView(phase,new LinearLayout.LayoutParams(0,-2,1));clock=BlueUi.label(this,"",17,BlueUi.INK,true);clock.setTypeface(Typeface.create("sans-serif-medium",Typeface.NORMAL));counter.addView(clock);section.addView(counter);refreshClock();
+        card();LinearLayout range=BlueUi.row(this);range.addView(BlueUi.label(this,"限制清单",17,BlueUi.INK,true),new LinearLayout.LayoutParams(0,-2,1));range.addView(BlueUi.link(this,"管理应用  ›",()->startActivity(new Intent(this,AppPickerActivity.class))));section.addView(range);
+        appSummary=BlueUi.label(this,"正在读取已选应用…",13,BlueUi.MUTED,false);section.addView(appSummary);BlueUi.gap(section,14);preview=BlueUi.row(this);section.addView(preview);
+        if(store.p.contains("pending")){BlueUi.gap(section,12);text("名单调整已保存，减少的限制将在08:00后生效。",12);}
+        loader.execute(()->{try{List<AppCatalog.Entry> entries=AppCatalog.load(this);runOnUiThread(()->{if(!isDestroyed())showPreview(entries);});}catch(RuntimeException e){runOnUiThread(()->{if(!isDestroyed())appSummary.setText("点击管理应用，检查限制清单");});}});
+        card();text("守护状态",17);
+        statusRow("shield","应用拦截",GuardService.connected?"服务已连接，夜间按清单执行":guardEnabled()?"权限已开启，等待服务连接":"开启后才能限制应用",GuardService.connected?"已连接":"待检查",this::accessibilitySettings);
+        BlueUi.divider(section);
+        statusRow("bell","倒计时通知","仅在01:00–08:00显示解除倒计时",GuardNotification.permitted(this)?"已允许":"未开启",this::notificationSettings);
+        BlueUi.divider(section);
+        statusRow("clock","华为后台运行",store.p.getBoolean("backgroundConfirmed",false)?"已由你确认，系统仍可能限制后台":"允许自启动、关联启动及后台活动",store.p.getBoolean("backgroundConfirmed",false)?"已确认":"去设置",this::backgroundHelp);
+        card();statusRow("lock","临时解锁规则","填写原因 · 等待10分钟 · 限时5分钟","查看",this::unlockInfo);
+        LinearLayout bottom=BlueUi.row(this);bottom.addView(BlueUi.link(this,"规则与说明",this::rules),new LinearLayout.LayoutParams(0,dp(52),1));bottom.addView(BlueUi.link(this,"最近解锁记录",()->new AlertDialog.Builder(this).setTitle("最近一次临时解锁").setMessage(store.p.getString("last","暂无记录")).setPositiveButton("关闭",null).show()),new LinearLayout.LayoutParams(0,dp(52),1));root.addView(bottom);
+    }
+    private void showPreview(List<AppCatalog.Entry> entries){
+        Set<String> selected=store.selected();List<AppCatalog.Entry> chosen=new ArrayList<>();int browserCount=0;
+        for(AppCatalog.Entry e:entries){if(e.browser)browserCount++;if(e.browser||selected.contains(e.pkg))chosen.add(e);}
+        appSummary.setText(chosen.size()+" 个应用纳入限制 · 其中 "+browserCount+" 个浏览器自动守护");preview.removeAllViews();
+        if(chosen.isEmpty()){preview.addView(BlueUi.link(this,"添加娱乐、社交或游戏应用  →",()->startActivity(new Intent(this,AppPickerActivity.class))));return;}
+        for(int i=0;i<Math.min(chosen.size(),5);i++){
+            AppCatalog.Entry e=chosen.get(i);ImageView icon=new ImageView(this);icon.setImageDrawable(AppCatalog.icon(this,e.pkg));icon.setContentDescription(e.label);icon.setScaleType(ImageView.ScaleType.FIT_CENTER);
+            LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(dp(38),dp(38));lp.rightMargin=dp(12);preview.addView(icon,lp);
         }
-    };
-    private int dp(float value) { return BlueUi.dp(this, value); }
-    @Override public void onCreate(Bundle b) {
-        super.onCreate(b); store = new Store(this); render();
+        if(chosen.size()>5)preview.addView(BlueUi.label(this,"+"+(chosen.size()-5),14,BlueUi.MUTED,true));
     }
-    @Override public void onNewIntent(Intent i) { super.onNewIntent(i); setIntent(i); render(); }
-    @Override public void onResume() {
-        super.onResume(); GuardService.settingsVisible = true;
-        if (store != null) render();
-        handler.removeCallbacks(timer); handler.post(timer);
+    private void statusRow(String icon,String title,String detail,String state,Runnable action){
+        LinearLayout row=BlueUi.row(this);row.setPadding(0,dp(14),0,dp(14));row.setMinimumHeight(dp(76));row.setBackground(BlueUi.ripple(this,Color.TRANSPARENT,10));
+        row.addView(new BlueUi.Glyph(this,icon,BlueUi.BLUE),new LinearLayout.LayoutParams(dp(21),dp(21)));
+        LinearLayout labels=BlueUi.column(this);LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,-2,1);lp.setMargins(dp(13),0,dp(6),0);row.addView(labels,lp);
+        labels.addView(BlueUi.label(this,title,15,BlueUi.INK,true));BlueUi.gap(labels,6);labels.addView(BlueUi.label(this,detail,11,BlueUi.MUTED,false));
+        row.addView(BlueUi.label(this,state,11,BlueUi.BLUE,true));row.addView(new BlueUi.Glyph(this,"next",BlueUi.MUTED),new LinearLayout.LayoutParams(dp(17),dp(17)));row.setOnClickListener(v->action.run());section.addView(row);
     }
-    @Override public void onPause() {
-        GuardService.settingsVisible = false; handler.removeCallbacks(timer); super.onPause();
+    private void refreshClock(){
+        if(clock==null)return;ZonedDateTime now=ZonedDateTime.now();boolean night=Policy.night(now.toLocalTime());
+        long seconds=Math.max(0,Duration.between(now,Policy.nextBoundary(now)).getSeconds());
+        phase.setText(night?"距离解除限制":"距离下次开始");clock.setText(String.format(Locale.ROOT,"%02d:%02d:%02d",seconds/3600,(seconds/60)%60,seconds%60));
+        badge.setText(GuardService.connected?(night?"限制时段":"等待夜间"):"尚未就绪");
     }
-    @Override public void onDestroy() { handler.removeCallbacks(timer); super.onDestroy(); }
-    private TextView text(String value, int size) {
-        TextView t = BlueUi.text(this, value, size, size >= 20 ? BlueUi.INK : BlueUi.MUTED);
-        if (size >= 20) t.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
-        section.addView(t); return t;
-    }
-    private void button(String value, boolean primary, Runnable action) {
-        section.addView(BlueUi.button(this, value, primary, action));
-    }
-    private void card() {
-        section = new LinearLayout(this); section.setOrientation(LinearLayout.VERTICAL);
-        section.setPadding(dp(20), dp(16), dp(20), dp(20));
-        section.setBackground(BlueUi.background(this, Color.WHITE, 0xffdfecf8, 24));
-        section.setElevation(dp(2));
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
-        lp.topMargin = dp(16); root.addView(section, lp);
-    }
-    private EditText input(String hint) {
-        EditText e = new EditText(this); e.setHint(hint); e.setTextSize(16);
-        e.setTextColor(BlueUi.INK); e.setHintTextColor(BlueUi.MUTED);
-        e.setPadding(dp(14),dp(14),dp(14),dp(14));
-        e.setBackground(BlueUi.background(this, 0xfff4f9fe, 0xffd5e6f6, 14));
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1,-2);
-        lp.topMargin = dp(8); section.addView(e,lp); return e;
-    }
-    private boolean guardEnabled() {
-        String enabled = Settings.Secure.getString(getContentResolver(), Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES);
-        return enabled != null && enabled.contains(getPackageName()+"/");
-    }
-    private void render() {
-        countdown = null;
-        ScrollView scroll = new ScrollView(this);
-        scroll.setBackgroundColor(0xffedf6ff); scroll.setClipToPadding(false); scroll.setFillViewport(true);
-        root = new LinearLayout(this); root.setOrientation(LinearLayout.VERTICAL);
-        root.setPadding(dp(20),dp(24),dp(20),dp(32)); scroll.addView(root); setContentView(scroll);
-        scroll.setOnApplyWindowInsetsListener((v,insets)->{
-            android.graphics.Insets bars = insets.getInsets(WindowInsets.Type.systemBars());
-            v.setPadding(bars.left,bars.top,bars.right,bars.bottom); return insets;
-        });
-        section = root;
-        text("N I G H T   G U A R D",12);
-        text("夜间守护",32);
-        text("把夜晚留给休息，把清晨留给自己。",14);
-        card();
-        GradientDrawable gradient = new GradientDrawable(GradientDrawable.Orientation.TL_BR, new int[]{0xfffafdff,0xffdceeff});
-        gradient.setCornerRadius(dp(24)); section.setBackground(gradient);
-        stage = text("",20); stage.setGravity(Gravity.CENTER);
-        dial = new BlueUi.Dial(this);
-        LinearLayout.LayoutParams dialParams = new LinearLayout.LayoutParams(dp(224), dp(224));
-        dialParams.gravity = Gravity.CENTER; section.addView(dial,dialParams);
-        TextView schedule = text("每天 01:00 — 08:00  ·  自动守护",14); schedule.setGravity(Gravity.CENTER);
-        refreshDial();
-        card(); text("守护设置",21);
-        text(guardEnabled()?"● 无障碍权限已开启":"○ 尚未启用守护权限",15);
-        text("已选择 "+store.selected().size()+" 个应用 · 浏览器自动纳入限制",14);
-        button("管理限制应用",true,this::selectApps);
-        button("设置守护权限",false,()->new AlertDialog.Builder(this)
-            .setTitle("开启夜间守护").setMessage("仅观察前台应用包名、显示拦截遮罩，不读取网页、聊天或密码。数据仅存手机。华为手机还需允许后台运行，实际限制效果请在手机上检查。")
-            .setPositiveButton("前往系统设置",(d,w)->startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)))
-            .setNegativeButton("稍后",null).show());
-        card(); text("夜间倒计时通知",21);
-        text("仅在凌晨01:00至早上08:00显示距离解除限制的倒计时；白天不显示通知。",14);
-        button(GuardNotification.permitted(this)?"通知已允许 · 管理通知":"开启倒计时通知",false,this::notificationSettings);
-        target = getIntent().getStringExtra("target");
-        if (target == null) target = store.p.getString("request",null);
-        if (target != null && !Apps.safe(this,target)) renderUnlock();
-        card(); text("安心使用",21);
-        text("电话、闹钟等核心功能保留。夜间减少限制的设置，早上08:00后生效。新装娱乐应用请补充勾选。",14);
-        if (store.p.contains("pending")) text("应用名单调整将在早上08:00后生效。",14);
-        text("请在华为应用启动管理中允许后台运行。卸载、强行停止、撤销权限或更改时间可能绕过限制；应用内网页随宿主应用处理。",13);
-        card(); text("最近一次临时使用",18); text(store.p.getString("last","还没有临时使用记录，继续保持。"),13);
-        section = root;
-        TextView footer = text("本地保存  ·  无广告  ·  无需联网",12); footer.setGravity(Gravity.CENTER);
-    }
-    private void refreshDial() {
-        if (dial == null) return;
-        ZonedDateTime now = ZonedDateTime.now();
-        boolean night = Policy.night(now.toLocalTime());
-        long remaining = Math.max(0,Duration.between(now,Policy.nextBoundary(now)).getSeconds());
-        String time = String.format(Locale.ROOT,"%02d:%02d:%02d",remaining/3600,(remaining/60)%60,remaining%60);
-        float total = (night?7:17)*3600f;
-        dial.update(time, night?"距离解除限制":"距离开始守护",1-remaining/total);
-        stage.setText(guardEnabled()?(night?"☾ 正在守护你的夜晚":"☀ 今天，也留一点时间给自己"):"☾ 开启权限，让夜晚安静下来");
-    }
+    private void accessibilitySettings(){new AlertDialog.Builder(this).setTitle("开启应用拦截").setMessage("在系统无障碍设置中开启“夜间守护”。仅观察前台应用包名并显示遮罩，不读取网页、聊天或密码。")
+        .setPositiveButton("前往设置",(d,w)->startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))).setNegativeButton("取消",null).show();}
+    private void backgroundHelp(){new AlertDialog.Builder(this).setTitle("检查华为后台运行").setMessage("在手机设置 → 应用和服务 → 应用启动管理中找到夜间守护，关闭自动管理，并允许自启动、关联启动和后台活动。\n\n不同系统入口可能不同；本应用不能自动确认这些选项。")
+        .setPositiveButton("打开应用设置",(d,w)->startActivity(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,android.net.Uri.parse("package:"+getPackageName()))))
+        .setNeutralButton("我已检查",(d,w)->{store.p.edit().putBoolean("backgroundConfirmed",true).apply();render();}).setNegativeButton("取消",null).show();}
+    private void unlockInfo(){new AlertDialog.Builder(this).setTitle("临时解锁规则").setMessage("在被拦截的应用页面申请临时使用。填写至少10字的原因，等待10分钟，再手动输入随机验证句。完成后仅开放该应用5分钟。\n\n重启会取消临时授权；夜间减少限制要等到08:00后生效。")
+        .setPositiveButton("知道了",null).show();}
+    private void rules(){new AlertDialog.Builder(this).setTitle("规则与说明").setMessage("每日按手机本地时间01:00–08:00执行。浏览器自动限制；电话、系统闹钟、桌面及系统设置保留。\n\n分类是本地识别建议，可在应用列表右侧菜单调整；社交类也可能包含必要通讯应用，请按需选择。\n\n应用内网页需要限制其宿主应用。普通安装不能阻止卸载、强行停止、撤销权限或更改时间；华为后台、多窗口和画中画效果需真机检查。\n\n数据仅存手机，不上传。")
+        .setPositiveButton("关闭",null).show();}
     private void notificationSettings() {
         if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
             requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS},41);
@@ -176,7 +146,5 @@ public class MainActivity extends Activity {
         long remaining=Math.max(0,Policy.WAIT_MS-(SystemClock.elapsedRealtime()-start));
         countdown.setText(remaining==0?"冷静期已结束，请输入验证句":"冷静期剩余 "+(remaining/60000)+"分"+((remaining/1000)%60)+"秒");
     }
- private void selectApps(){Map<String,String> apps=Apps.launchers(this);String[] pkgs=apps.keySet().toArray(new String[0]);String[] labels=new String[pkgs.length];boolean[] flags=new boolean[pkgs.length];Set<String> selected=store.selected();Set<String> browsers=Apps.browsers(this);for(int n=0;n<pkgs.length;n++){labels[n]=apps.get(pkgs[n])+"\n"+pkgs[n]+(browsers.contains(pkgs[n])?"（浏览器自动限制）":"");flags[n]=selected.contains(pkgs[n])||browsers.contains(pkgs[n]);}
- new AlertDialog.Builder(this).setTitle("娱乐与流媒体应用名单").setMultiChoiceItems(labels,flags,(d,n,checked)->flags[n]=checked).setPositiveButton("保存",(d,w)->{Set<String> values=new HashSet<>();for(int n=0;n<pkgs.length;n++)if(flags[n])values.add(pkgs[n]);store.save(values);render();}).setNegativeButton("取消",null).show(); }
 
 }
