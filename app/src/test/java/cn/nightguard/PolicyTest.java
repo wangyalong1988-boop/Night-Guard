@@ -102,6 +102,27 @@ public class PolicyTest {
         assertEquals("6小时12分", Policy.duration((6 * 60 + 12) * 60000L)); assertEquals("7小时", Policy.duration(7 * 3600000L));
     }
 
+    @Test public void sessionsAreSplitAtMidnight() {
+        ZonedDateTime start = ZonedDateTime.of(2026, 11, 11, 23, 30, 0, 0, SHANGHAI);
+        java.util.List<long[]> pieces = Policy.splitByDay(start.toInstant().toEpochMilli(), start.plusMinutes(50).toInstant().toEpochMilli(), SHANGHAI);
+        assertEquals(2, pieces.size());
+        assertEquals(LocalDate.of(2026, 11, 11).toEpochDay(), pieces.get(0)[0]); assertEquals(30 * 60000L, pieces.get(0)[1]);
+        assertEquals(LocalDate.of(2026, 11, 12).toEpochDay(), pieces.get(1)[0]); assertEquals(20 * 60000L, pieces.get(1)[1]);
+        assertEquals(0, Policy.splitByDay(10, 10, SHANGHAI).size());
+    }
+
+    @Test public void goalStepsDownWeeklyUntilTarget() {
+        assertEquals(300, Policy.goalFor(300, 180, 10, 0)); assertEquals(300, Policy.goalFor(300, 180, 10, 6));
+        assertEquals(290, Policy.goalFor(300, 180, 10, 7)); assertEquals(180, Policy.goalFor(300, 180, 10, 400));
+        assertEquals(180, Policy.goalFor(300, 180, 0, 0)); assertEquals(180, Policy.goalFor(150, 180, 10, 0));
+        assertEquals(240, Policy.roundUpTen(233)); assertEquals(240, Policy.roundUpTen(240));
+    }
+
+    @Test public void changeIsAPercentage() {
+        assertEquals(Integer.valueOf(-20), Policy.change(300, 240)); assertEquals(Integer.valueOf(10), Policy.change(200, 220));
+        assertNull(Policy.change(0, 100)); assertNull(Policy.change(Double.NaN, 100));
+    }
+
     @Test public void phrasesAreStableForTheSameNumber() {
         assertEquals(Policy.phrase(123456), Policy.phrase(123456)); assertTrue(Policy.phrase(7).endsWith(" 0007"));
     }

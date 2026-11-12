@@ -14,7 +14,8 @@ import java.util.List;
  */
 final class GuardNotification {
     private static final String CHANNEL = "guard_countdown", TIPS = "guard_tips", MORNING = "guard_morning";
-    private static final int ID = 101, WIND_DOWN_ID = 102, MORNING_ID = 103;
+    private static final int ID = 101, WIND_DOWN_ID = 102, MORNING_ID = 103, GOAL_ID = 104, LONG_ID = 105;
+    static final long LONG_SESSION_MS = 30 * 60 * 1000L;
     private final Context context;
     private long lastBoundary = -1, lastPost = -60000;
 
@@ -32,8 +33,8 @@ final class GuardNotification {
         NotificationManager m = context.getSystemService(NotificationManager.class);
         NotificationChannel countdown = new NotificationChannel(CHANNEL, "夜间倒计时", NotificationManager.IMPORTANCE_LOW);
         countdown.setDescription("限制时段内显示距离解除的倒计时"); countdown.setSound(null, null); countdown.enableVibration(false);
-        NotificationChannel tips = new NotificationChannel(TIPS, "睡前提醒", NotificationManager.IMPORTANCE_DEFAULT);
-        tips.setDescription("限制开始前15分钟提醒一次"); tips.enableVibration(false);
+        NotificationChannel tips = new NotificationChannel(TIPS, "温和提醒", NotificationManager.IMPORTANCE_DEFAULT);
+        tips.setDescription("睡前15分钟、每日目标用到八成和用满时、连续看屏幕30分钟时各提醒一次"); tips.enableVibration(false);
         NotificationChannel morning = new NotificationChannel(MORNING, "晨间小结", NotificationManager.IMPORTANCE_LOW);
         morning.setDescription("早上第一次使用手机时，告诉你昨晚的守护结果"); morning.setSound(null, null);
         m.createNotificationChannels(List.of(countdown, tips, morning));
@@ -46,12 +47,30 @@ final class GuardNotification {
 
     void refresh(Store store, Policy.Schedule s, ZonedDateTime now) {
         if (!permitted(context)) return;
+        usage(store);
         if (Policy.night(now.toLocalTime(), s)) { countdown(s, now); return; }
         if (lastBoundary != -1) cancel();
         long minutes = Policy.minutesUntilStart(now, s);
         if (minutes > 0 && minutes <= Policy.WIND_DOWN_MINUTES && store.once("tip:wind:" + Policy.nextStart(now, s).toLocalDate()))
             post(WIND_DOWN_ID, TIPS, "还有 " + minutes + " 分钟进入夜间守护", "把想做的事收个尾，该准备睡觉了。", Notification.CATEGORY_REMINDER);
         morning(store, s, now);
+    }
+
+    /** Gentle nudges by day: at 80% and 100% of the goal, and after 30 minutes of looking at the screen. */
+    private void usage(Store store) {
+        long now = System.currentTimeMillis();
+        long session = store.currentSessionMs(now), start = store.currentSessionStart();
+        if (session >= LONG_SESSION_MS && store.p.getLong("longReminded", -1) != start) {
+            store.p.edit().putLong("longReminded", start).apply();
+            post(LONG_ID, TIPS, "已经连续看了 " + session / 60000 + " 分钟屏幕", "放下手机，看看远处，站起来走两步吧。", Notification.CATEGORY_REMINDER);
+        }
+        int goal = store.goalMinutes();
+        if (goal <= 0) return;
+        long used = store.today().useMs, goalMs = goal * 60000L; String day = java.time.LocalDate.now().toString();
+        if (used >= goalMs && store.once("tip:goal100:" + day))
+            post(GOAL_ID, TIPS, "今天的 " + Policy.duration(goalMs) + " 已经用完了", "剩下的时间试试把手机放远一点，明天的数字会更好看。", Notification.CATEGORY_REMINDER);
+        else if (used >= goalMs * 0.8 && used < goalMs && store.once("tip:goal80:" + day))
+            post(GOAL_ID, TIPS, "今天已用 " + Policy.duration(used), "离 " + Policy.duration(goalMs) + " 的目标还剩 " + Policy.duration(goalMs - used) + "。", Notification.CATEGORY_REMINDER);
     }
 
     private void countdown(Policy.Schedule s, ZonedDateTime now) {

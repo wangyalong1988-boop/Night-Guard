@@ -66,6 +66,21 @@ public class InterfaceTest {
             capture("cover.png");
         }
     }
+    @Test public void historyShowsChartsFromSampleDays() throws Exception {
+        Context c=InstrumentationRegistry.getInstrumentation().getTargetContext();Store store=new Store(c);
+        android.content.SharedPreferences.Editor e=store.p.edit();java.time.LocalDate today=java.time.LocalDate.now();
+        long[] minutes={312,287,301,264,250,233,198,221,205,190,176,182,160,95};
+        for(int i=0;i<minutes.length;i++){java.time.LocalDate d=today.minusDays(minutes.length-1-i);e.putLong("d:"+d+":u",minutes[i]*60000L).putInt("d:"+d+":p",80-i*3).putLong("n:"+d+":rest",(330+i*6)*60000L);}
+        e.putLong("screenSince",System.currentTimeMillis()-20L*86400000L).putInt("goalTarget",180).putInt("goalStep",10).putInt("goalBase",240).putString("goalStart",today.minusDays(10).toString()).commit();
+        try(ActivityScenario<HistoryActivity> scenario=ActivityScenario.launch(HistoryActivity.class)){
+            settle();scenario.onActivity(a->{assertNotNull(findText(a.getWindow().getDecorView(),"每天亮屏时间"));assertNotNull(findText(a.getWindow().getDecorView(),"夜里放下手机"));});
+            capture("history.png");
+        } finally {
+            android.content.SharedPreferences.Editor clear=store.p.edit();
+            for(String k:store.p.getAll().keySet())if(k.startsWith("d:")||k.startsWith("n:")||k.startsWith("goal")||k.equals("screenSince"))clear.remove(k);
+            clear.commit();
+        }
+    }
     @Test public void homeFollowsDarkMode() throws Exception {
         shell("cmd uimode night yes");
         try(ActivityScenario<MainActivity> scenario=ActivityScenario.launch(MainActivity.class)){

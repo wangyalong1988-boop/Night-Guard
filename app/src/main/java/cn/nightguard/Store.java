@@ -207,7 +207,113 @@ final class Store {
             if (Long.parseLong(s.substring(s.indexOf('-') + 1)) > now - 3 * 86400000L) log.add(s);
         } catch (RuntimeException ignored) { }
         if (now > start) log.add(start + "-" + now);
-        p.edit().putString("useLog", String.join(";", log)).remove("useAt").apply();
+        SharedPreferences.Editor e = p.edit().putString("useLog", String.join(";", log)).remove("useAt");
+        if (now > start) addUse(e, start, now);
+        e.apply();
+    }
+
+    /** Adds a finished session to the per-day totals, split at midnight; the pickup counts on the day it began. */
+    private void addUse(SharedPreferences.Editor e, long start, long end) {
+        java.time.ZoneId zone = java.time.ZoneId.systemDefault();
+        for (long[] piece : Policy.splitByDay(start, end, zone)) {
+            String k = "d:" + LocalDate.ofEpochDay(piece[0]) + ":u";
+            e.putLong(k, p.getLong(k, 0) + piece[1]);
+        }
+        String pk = "d:" + java.time.Instant.ofEpochMilli(start).atZone(zone).toLocalDate() + ":p";
+        e.putInt(pk, p.getInt(pk, 0) + 1);
+    }
+
+    /** Milliseconds since the current unlock, or 0 when the phone is not in use. */
+    long currentSessionMs(long now) { return p.contains("useAt") ? Math.max(0, now - p.getLong("useAt", now)) : 0; }
+
+    long currentSessionStart() { return p.getLong("useAt", -1); }
+
+    // ---- Daily screen time ------------------------------------------------------------------
+
+    /** One calendar day of use. {@code recorded} is false for days before recording started. */
+    static final class Day {
+        final LocalDate date; final long useMs; final int pickups; final boolean recorded;
+        Day(LocalDate date, long useMs, int pickups, boolean recorded) { this.date = date; this.useMs = useMs; this.pickups = pickups; this.recorded = recorded; }
+    }
+
+    LocalDate recordingSince() {
+        return p.contains("screenSince") ? java.time.Instant.ofEpochMilli(p.getLong("screenSince", 0)).atZone(java.time.ZoneId.systemDefault()).toLocalDate() : null;
+    }
+
+    /** The last {@code count} days, oldest first, today last; today includes the session going on now. */
+    List<Day> days(int count) {
+        long now = System.currentTimeMillis(); LocalDate today = LocalDate.now(), since = recordingSince();
+        List<Day> r = new ArrayList<>();
+        for (int i = count - 1; i >= 0; i--) {
+            LocalDate d = today.minusDays(i); long use = p.getLong("d:" + d + ":u", 0); int pick = p.getInt("d:" + d + ":p", 0);
+            if (i == 0 && p.contains("useAt")) {
+                long start = p.getLong("useAt", now);
+                for (long[] piece : Policy.splitByDay(start, now, java.time.ZoneId.systemDefault())) if (piece[0] == d.toEpochDay()) use += piece[1];
+                if (!java.time.Instant.ofEpochMilli(start).atZone(java.time.ZoneId.systemDefault()).toLocalDate().isBefore(d)) pick++;
+            }
+            r.add(new Day(d, use, pick, since != null && !d.isBefore(since)));
+        }
+        return r;
+    }
+
+    Day today() { List<Day> d = days(1); return d.get(0); }
+
+    // ---- Goal -------------------------------------------------------------------------------
+
+    boolean hasGoal() { return p.contains("goalTarget"); }
+
+    /** Today's goal in minutes, or -1 when none is set. */
+    int goalMinutes() { return goalMinutes(LocalDate.now()); }
+
+    int goalMinutes(LocalDate day) {
+        if (!hasGoal()) return -1;
+        LocalDate start = LocalDate.parse(p.getString("goalStart", day.toString()));
+        if (day.isBefore(start)) return -1;
+        return Policy.goalFor(p.getInt("goalBase", 0), p.getInt("goalTarget", 0), p.getInt("goalStep", 0), java.time.temporal.ChronoUnit.DAYS.between(start, day));
+    }
+
+    int goalTarget() { return p.getInt("goalTarget", -1); }
+
+    /** Sets a goal, starting from the recent average (rounded up) when that is higher than the target. */
+    int setGoal(int targetMinutes, int stepMinutes) {
+        double avg = recentAverageMs(7);
+        int base = Double.isNaN(avg) ? targetMinutes : Math.max(targetMinutes, Policy.roundUpTen(Math.round(avg / 60000)));
+        p.edit().putInt("goalTarget", targetMinutes).putInt("goalStep", stepMinutes).putInt("goalBase", base).putString("goalStart", LocalDate.now().toString()).apply();
+        return base;
+    }
+
+    void clearGoal() { p.edit().remove("goalTarget").remove("goalStep").remove("goalBase").remove("goalStart").apply(); }
+
+    /** Average over recorded days among the last {@code count} days before today. Needs at least 3 such days. */
+    double recentAverageMs(int count) {
+        List<Day> all = days(count + 1); long sum = 0; int n = 0;
+        for (int i = 0; i < count; i++) { Day d = all.get(i); if (d.recorded) { sum += d.useMs; n++; } }
+        return n < 3 ? Double.NaN : (double) sum / n;
+    }
+
+    // ---- Nightly results kept for history ---------------------------------------------------
+
+    /** Saves the result of the last finished night once, so its chart survives after the raw log is trimmed. */
+    void finalizeNight() {
+        if (night()) return;
+        LocalDate key = Policy.nightKey(ZonedDateTime.now(), schedule());
+        String k = "n:" + key;
+        if (p.contains(k + ":rest")) return;
+        NightUse use = rest(key);
+        if (use == null || use.ongoing()) return;
+        p.edit().putLong(k + ":rest", use.rest.restMs()).putLong(k + ":win", use.rest.windowMs).putInt(k + ":pick", use.rest.pickups).putLong(k + ":long", use.rest.longestRestMs).apply();
+    }
+
+    /** Hours put down for each of the last {@code count} finished nights, oldest first; NaN where unknown. */
+    double[] restHistory(int count, LocalDate[] dates) {
+        finalizeNight();
+        List<Night> nights = recentNights(count); double[] r = new double[count];
+        for (int i = 0; i < count; i++) {
+            Night n = nights.get(i); if (dates != null) dates[i] = n.date;
+            String k = "n:" + n.date + ":rest";
+            r[i] = p.contains(k) ? p.getLong(k, 0) : Double.NaN;
+        }
+        return r;
     }
 
     /** Recorded use sessions, sorted, including one still going on. */
@@ -245,11 +351,11 @@ final class Store {
 
     boolean once(String key) { if (p.getBoolean(key, false)) return false; p.edit().putBoolean(key, true).apply(); return true; }
 
-    /** Drops night records older than 60 days. */
+    /** Drops night, day and reminder records older than 120 days. */
     void prune() {
-        LocalDate cutoff = LocalDate.now().minusDays(60); SharedPreferences.Editor e = null;
+        LocalDate cutoff = LocalDate.now().minusDays(120); SharedPreferences.Editor e = null;
         for (String key : new ArrayList<>(p.getAll().keySet())) {
-            String date = key.startsWith("n:") && key.length() > 12 ? key.substring(2, 12) : key.startsWith("tip:") && key.length() > 14 ? key.substring(key.length() - 10) : null;
+            String date = (key.startsWith("n:") || key.startsWith("d:")) && key.length() > 12 ? key.substring(2, 12) : key.startsWith("tip:") && key.length() > 14 ? key.substring(key.length() - 10) : null;
             if (date != null && parse(date, LocalDate.now()).isBefore(cutoff)) { if (e == null) e = p.edit(); e.remove(key); }
         }
         if (e != null) e.apply();

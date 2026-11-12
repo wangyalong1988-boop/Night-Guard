@@ -109,7 +109,7 @@ public class GuardService extends AccessibilityService {
         refreshCaches();
         ZonedDateTime now = ZonedDateTime.now(); Policy.Schedule schedule = store.schedule();
         boolean night = Policy.night(now.toLocalTime(), schedule);
-        if (night) store.markGuarded();
+        if (night) store.markGuarded(); else store.finalizeNight();
         String target = null; int windows = 0;
         if (night) {
             Set<String> selected = store.selected(); List<String> visible = visibleApps(); windows = visible.size();

@@ -20,6 +20,8 @@ public class MainActivity extends Activity {
     private LinearLayout root, section, preview;
     private TextView countdown, clock, phase, appSummary, badge, interceptionDetail, interceptionState;
     private BlueUi.NightBar bar;
+    private BlueUi.Meter meter;
+    private TextView todayUsed, todayDetail;
     private boolean clockNight;
     private String target, reasonDraft = "", phraseDraft = "";
     private EditText reasonInput, phraseInput;
@@ -72,7 +74,7 @@ public class MainActivity extends Activity {
         root = BlueUi.column(this); root.setPadding(dp(22), dp(24), dp(22), dp(24)); scroll.addView(root); section = root;
 
         LinearLayout header = BlueUi.row(this); LinearLayout titles = BlueUi.column(this);
-        titles.addView(BlueUi.label(this, "夜间守护", 26, BlueUi.INK, true)); BlueUi.gap(titles, 7);
+        titles.addView(BlueUi.label(this, "息屏", 26, BlueUi.INK, true)); BlueUi.gap(titles, 7);
         titles.addView(BlueUi.label(this, greeting(), 12, BlueUi.MUTED, false));
         header.addView(titles, new LinearLayout.LayoutParams(0, -2, 1)); badge = BlueUi.pill(this, "", BlueUi.BLUE, BlueUi.PALE); header.addView(badge); root.addView(header);
 
@@ -81,8 +83,10 @@ public class MainActivity extends Activity {
         if (target != null) renderUnlock();
 
         renderSetup();
+        if (!clockNight) renderToday();
         renderSchedule(schedule);
         renderRest(schedule);
+        if (clockNight) renderToday();
         renderNights();
 
         card(); heading("限制清单", "管理应用  ›", () -> startActivity(new Intent(this, AppPickerActivity.class)));
@@ -123,7 +127,7 @@ public class MainActivity extends Activity {
         if (a && b && c) return;
         int done = (a ? 1 : 0) + (b ? 1 : 0) + (c ? 1 : 0);
         card(BlueUi.PALE); heading("还差 " + (3 - done) + " 步就能开始守护", null, null); BlueUi.gap(section, 6);
-        setupStep(1, a, "开启应用拦截", "在系统无障碍设置中打开“夜间守护”", this::accessibilitySettings);
+        setupStep(1, a, "开启应用拦截", "在系统无障碍设置中打开“息屏”", this::accessibilitySettings);
         setupStep(2, b, "选择夜里要限制的应用", "短视频、游戏、社交……浏览器已帮你识别", () -> startActivity(new Intent(this, AppPickerActivity.class)));
         setupStep(3, c, "允许后台运行", "华为手机需要手动允许，否则夜里可能失效", this::backgroundHelp);
     }
@@ -156,6 +160,54 @@ public class MainActivity extends Activity {
         clock = BlueUi.label(this, "", 17, BlueUi.INK, true); clock.setFontFeatureSettings("tnum"); counter.addView(clock); section.addView(counter);
         Policy.Schedule desired = store.desiredSchedule();
         if (!desired.equals(schedule)) { BlueUi.gap(section, 12); section.addView(BlueUi.label(this, "已改为 " + desired.text() + "，今晚 " + schedule.endText() + " 后生效", 12, BlueUi.BLUE, false)); }
+    }
+
+    /** Today's screen time against the goal, refreshed every second while the page is open. */
+    private void renderToday() {
+        card(); heading("今天", "用机记录  ›", () -> startActivity(new Intent(this, HistoryActivity.class)));
+        if (store.recordingSince() == null) {
+            section.addView(BlueUi.label(this, "开启应用拦截后，会从那一刻开始记录每天的亮屏时间。", 12, BlueUi.MUTED, false)); todayUsed = null; return;
+        }
+        BlueUi.gap(section, 8);
+        LinearLayout big = BlueUi.row(this); big.setGravity(Gravity.BOTTOM);
+        big.addView(BlueUi.label(this, "已用 ", 14, BlueUi.MUTED, false));
+        todayUsed = BlueUi.label(this, "", 26, BlueUi.INK, true); todayUsed.setFontFeatureSettings("tnum"); big.addView(todayUsed);
+        section.addView(big); BlueUi.gap(section, 12);
+        meter = new BlueUi.Meter(this); section.addView(meter, new LinearLayout.LayoutParams(-1, dp(10))); BlueUi.gap(section, 10);
+        todayDetail = BlueUi.label(this, "", 12, BlueUi.MUTED, false); section.addView(todayDetail);
+        if (!store.hasGoal()) { BlueUi.gap(section, 6); LinearLayout row = BlueUi.row(this); row.addView(BlueUi.link(this, "设定每日目标  →", this::chooseGoal)); section.addView(row); meter.setVisibility(View.GONE); }
+        else { BlueUi.gap(section, 6); LinearLayout row = BlueUi.row(this); row.addView(BlueUi.link(this, "调整目标", this::chooseGoal)); section.addView(row); }
+        refreshToday();
+    }
+
+    private void refreshToday() {
+        if (todayUsed == null) return;
+        Store.Day t = store.today(); int goal = store.goalMinutes(); long goalMs = goal * 60000L;
+        todayUsed.setText(Policy.duration(t.useMs)); meter.set(t.useMs, goalMs);
+        String picks = "拿起 " + t.pickups + " 次";
+        if (goal <= 0) { todayDetail.setText(picks + " · 设个目标，每周少用一点点"); return; }
+        String status = t.useMs < goalMs ? "目标 " + Policy.duration(goalMs) + " · 还剩 " + Policy.duration(goalMs - t.useMs) : "已超出目标 " + Policy.duration(t.useMs - goalMs);
+        String pace = goal > store.goalTarget() ? "\n每周自动减少，最终目标 " + Policy.duration(store.goalTarget() * 60000L) : "";
+        todayDetail.setText(status + " · " + picks + pace);
+    }
+
+    private void chooseGoal() {
+        int[] targets = {60, 90, 120, 150, 180, 240, 300}; String[] names = new String[targets.length + (store.hasGoal() ? 1 : 0)];
+        for (int i = 0; i < targets.length; i++) names[i] = "每天 " + Policy.duration(targets[i] * 60000L);
+        if (store.hasGoal()) names[targets.length] = "不设目标";
+        double avg = store.recentAverageMs(7);
+        new AlertDialog.Builder(this).setTitle(Double.isNaN(avg) ? "最终想把每天用机时间控制在？" : "最近日均 " + Policy.duration((long) avg) + "，最终想控制在？")
+                .setItems(names, (d, which) -> {
+                    if (which == targets.length) { store.clearGoal(); render(); return; }
+                    int target = targets[which];
+                    String[] paces = {"温和：每周少 10 分钟（推荐）", "积极：每周少 20 分钟", "直接：从今天起就按目标"};
+                    int[] steps = {10, 20, 0};
+                    new AlertDialog.Builder(this).setTitle("怎么减少？").setItems(paces, (d2, w2) -> {
+                        int base = store.setGoal(target, steps[w2]);
+                        Toast.makeText(this, base > target ? "从每天 " + Policy.duration(base * 60000L) + " 开始，每周减少 " + steps[w2] + " 分钟，直到 " + Policy.duration(target * 60000L) : "目标：每天 " + Policy.duration(target * 60000L), Toast.LENGTH_LONG).show();
+                        render();
+                    }).show();
+                }).show();
     }
 
     /** How long the phone was put down during the last night (or tonight so far), with a timeline. */
@@ -236,6 +288,7 @@ public class MainActivity extends Activity {
         phase.setText(night ? "距离 " + s.endText() + " 解除" : "距离今晚 " + s.startText() + " 开始");
         clock.setText(String.format(Locale.ROOT, "%02d:%02d:%02d", seconds / 3600, (seconds / 60) % 60, seconds % 60));
         bar.set(Policy.progress(now, s));
+        refreshToday();
         if (interceptionState != null) { interceptionState.setText(GuardService.connected ? "已连接" : "待检查"); interceptionDetail.setText(interceptionText()); }
         badge.setText(GuardService.connected ? (night ? "守护中" : "等待夜间") : "尚未就绪");
     }
@@ -265,11 +318,11 @@ public class MainActivity extends Activity {
     // ---- dialogs ----------------------------------------------------------------------------
 
     private void accessibilitySettings() {
-        new AlertDialog.Builder(this).setTitle("开启应用拦截").setMessage("在系统无障碍设置中开启“夜间守护”。\n\n系统会提示它可以“查看屏幕内容”。夜间守护只读取屏幕上每个窗口属于哪个应用，用来发现分屏和小窗里的受限应用；不读取文字、网页、聊天或密码，也没有联网权限。")
+        new AlertDialog.Builder(this).setTitle("开启应用拦截").setMessage("在系统无障碍设置中开启“息屏”。\n\n系统会提示它可以“查看屏幕内容”。息屏只读取屏幕上每个窗口属于哪个应用，用来发现分屏和小窗里的受限应用；不读取文字、网页、聊天或密码，也没有联网权限。")
                 .setPositiveButton("前往设置", (d, w) -> startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))).setNegativeButton("取消", null).show();
     }
     private void backgroundHelp() {
-        new AlertDialog.Builder(this).setTitle("检查华为后台运行").setMessage("在手机设置 → 应用和服务 → 应用启动管理中找到夜间守护，关闭自动管理，并允许自启动、关联启动和后台活动。\n\n不同系统入口可能不同；本应用不能自动确认这些选项。")
+        new AlertDialog.Builder(this).setTitle("检查华为后台运行").setMessage("在手机设置 → 应用和服务 → 应用启动管理中找到息屏，关闭自动管理，并允许自启动、关联启动和后台活动。\n\n不同系统入口可能不同；本应用不能自动确认这些选项。")
                 .setPositiveButton("打开应用设置", (d, w) -> startActivity(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, android.net.Uri.parse("package:" + getPackageName()))))
                 .setNeutralButton("我已检查", (d, w) -> { store.p.edit().putBoolean("backgroundConfirmed", true).apply(); render(); }).setNegativeButton("取消", null).show();
     }

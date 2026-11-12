@@ -136,6 +136,37 @@ public final class Policy {
         return new Rest(to - from, used, longest, pickups);
     }
 
+    /** Splits a use session at local midnights: each piece is {epochDay, millis}. */
+    public static java.util.List<long[]> splitByDay(long start, long end, java.time.ZoneId zone) {
+        java.util.List<long[]> pieces = new java.util.ArrayList<>();
+        long cursor = start;
+        while (cursor < end) {
+            LocalDate day = java.time.Instant.ofEpochMilli(cursor).atZone(zone).toLocalDate();
+            long next = Math.min(end, day.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli());
+            pieces.add(new long[]{day.toEpochDay(), next - cursor}); cursor = next;
+        }
+        return pieces;
+    }
+
+    /**
+     * Today's screen-time goal in minutes. It starts from the user's recent average and drops by
+     * {@code step} minutes each full week until it reaches the target, so the change stays gentle.
+     */
+    public static int goalFor(int baseMinutes, int targetMinutes, int stepMinutes, long daysSinceStart) {
+        if (stepMinutes <= 0 || baseMinutes <= targetMinutes) return targetMinutes;
+        long weeks = Math.max(0, daysSinceStart) / 7;
+        return (int) Math.max(targetMinutes, baseMinutes - stepMinutes * weeks);
+    }
+
+    /** Rounds minutes up to the next ten, e.g. 233 to 240, for a friendlier starting goal. */
+    public static int roundUpTen(long minutes) { return (int) ((Math.max(0, minutes) + 9) / 10 * 10); }
+
+    /** Percentage change from {@code before} to {@code after}, or null when there is nothing to compare. */
+    public static Integer change(double before, double after) {
+        if (!(before > 0) || Double.isNaN(after)) return null;
+        return (int) Math.round((after - before) / before * 100);
+    }
+
     /** "6小时12分", "45分钟", "不到1分钟". */
     public static String duration(long ms) {
         long minutes = ms / 60000;
