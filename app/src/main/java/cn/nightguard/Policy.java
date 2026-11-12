@@ -111,6 +111,39 @@ public final class Policy {
         return null;
     }
 
+    /** How a night went for the phone: time in use, times it was picked up and the longest stretch it was put down. */
+    public static final class Rest {
+        public final long windowMs, usedMs, longestRestMs; public final int pickups;
+        public Rest(long windowMs, long usedMs, long longestRestMs, int pickups) { this.windowMs = windowMs; this.usedMs = usedMs; this.longestRestMs = longestRestMs; this.pickups = pickups; }
+        public long restMs() { return Math.max(0, windowMs - usedMs); }
+    }
+
+    /**
+     * Summarises use sessions (unlock to screen off, epoch millis, sorted) inside a window.
+     * Sessions are clipped to the window; overlapping ones are merged.
+     */
+    public static Rest rest(java.util.List<long[]> sessions, long from, long to) {
+        if (to <= from) return new Rest(0, 0, 0, 0);
+        long used = 0, longest = 0, cursor = from; int pickups = 0;
+        for (long[] s : sessions) {
+            long a = Math.max(s[0], from), b = Math.min(s[1], to);
+            if (b <= a || b <= cursor) continue;          // outside the window, or already counted
+            if (a >= cursor) { pickups++; longest = Math.max(longest, a - cursor); }
+            else a = cursor;                              // overlaps the previous session: same pickup
+            used += b - a; cursor = b;
+        }
+        longest = Math.max(longest, to - cursor);
+        return new Rest(to - from, used, longest, pickups);
+    }
+
+    /** "6小时12分", "45分钟", "不到1分钟". */
+    public static String duration(long ms) {
+        long minutes = ms / 60000;
+        if (minutes < 1) return "不到1分钟";
+        if (minutes < 60) return minutes + "分钟";
+        return (minutes / 60) + "小时" + (minutes % 60 > 0 ? (minutes % 60) + "分" : "");
+    }
+
     static final String[] PHRASES = {
         "我知道现在是休息时间，只用五分钟",
         "用完这五分钟我就放下手机睡觉",

@@ -36,6 +36,8 @@ public class GuardService extends AccessibilityService {
         @Override public void onReceive(Context c, Intent intent) {
             String action = intent.getAction() == null ? "" : intent.getAction();
             if (action.startsWith("android.intent.action.PACKAGE_")) cachedAt = -CACHE_MS;
+            if (Intent.ACTION_USER_PRESENT.equals(action)) store.screenUse(true, System.currentTimeMillis());
+            if (Intent.ACTION_SCREEN_OFF.equals(action)) { store.screenUse(false, System.currentTimeMillis()); return; }
             check();
         }
     };
@@ -43,10 +45,15 @@ public class GuardService extends AccessibilityService {
     @Override public void onServiceConnected() {
         connected = true; store = new Store(this); notification = new GuardNotification(this); wm = getSystemService(WindowManager.class);
         IntentFilter system = new IntentFilter();
-        for (String a : new String[]{Intent.ACTION_SCREEN_ON, Intent.ACTION_USER_PRESENT, Intent.ACTION_TIME_CHANGED, Intent.ACTION_TIMEZONE_CHANGED, Intent.ACTION_DATE_CHANGED}) system.addAction(a);
+        for (String a : new String[]{Intent.ACTION_SCREEN_ON, Intent.ACTION_SCREEN_OFF, Intent.ACTION_USER_PRESENT, Intent.ACTION_TIME_CHANGED, Intent.ACTION_TIMEZONE_CHANGED, Intent.ACTION_DATE_CHANGED}) system.addAction(a);
         IntentFilter packages = new IntentFilter(); packages.addDataScheme("package");
         for (String a : new String[]{Intent.ACTION_PACKAGE_ADDED, Intent.ACTION_PACKAGE_REMOVED, Intent.ACTION_PACKAGE_REPLACED}) packages.addAction(a);
         register(system); register(packages);
+        // Start recording use from now: an unlocked, lit screen counts as "in use".
+        android.app.KeyguardManager keyguard = getSystemService(android.app.KeyguardManager.class);
+        boolean using = getSystemService(PowerManager.class).isInteractive() && (keyguard == null || !keyguard.isKeyguardLocked());
+        store.p.edit().remove("useAt").apply(); // a session left open by a killed service cannot be trusted
+        store.screenUse(using, System.currentTimeMillis());
         store.prune(); check();
     }
 

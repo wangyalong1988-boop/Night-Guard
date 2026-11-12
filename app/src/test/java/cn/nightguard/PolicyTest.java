@@ -84,6 +84,24 @@ public class PolicyTest {
         assertThrows(IllegalArgumentException.class, () -> new Policy.Schedule(60, 60));
     }
 
+    @Test public void restCountsPickupsAndLongestStretch() {
+        long m = 60000; // window 0..420 minutes (a 7-hour night)
+        java.util.List<long[]> sessions = java.util.List.of(new long[]{-30 * m, 10 * m}, new long[]{100 * m, 110 * m}, new long[]{105 * m, 120 * m}, new long[]{400 * m, 500 * m});
+        Policy.Rest r = Policy.rest(sessions, 0, 420 * m);
+        assertEquals(3, r.pickups);                       // in use at the start, once at 1:40 (two overlapping records), once near the end
+        assertEquals((10 + 20 + 20) * m, r.usedMs);
+        assertEquals(280 * m, r.longestRestMs);           // 120 to 400 minutes
+        assertEquals(370 * m, r.restMs());
+        Policy.Rest none = Policy.rest(java.util.List.of(), 0, 420 * m);
+        assertEquals(0, none.pickups); assertEquals(420 * m, none.longestRestMs);
+        assertEquals(0, Policy.rest(sessions, 10, 10).windowMs);
+    }
+
+    @Test public void durationsReadNaturally() {
+        assertEquals("不到1分钟", Policy.duration(30000)); assertEquals("45分钟", Policy.duration(45 * 60000));
+        assertEquals("6小时12分", Policy.duration((6 * 60 + 12) * 60000L)); assertEquals("7小时", Policy.duration(7 * 3600000L));
+    }
+
     @Test public void phrasesAreStableForTheSameNumber() {
         assertEquals(Policy.phrase(123456), Policy.phrase(123456)); assertTrue(Policy.phrase(7).endsWith(" 0007"));
     }

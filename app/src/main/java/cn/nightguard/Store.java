@@ -194,6 +194,55 @@ final class Store {
         return streak;
     }
 
+    // ---- Phone use: from unlocking the screen to turning it off ---------------------------
+
+    /** @param using true when the screen is unlocked, false when it turns off */
+    void screenUse(boolean using, long now) {
+        if (!p.contains("screenSince")) p.edit().putLong("screenSince", now).apply();
+        if (using) { if (!p.contains("useAt")) p.edit().putLong("useAt", now).apply(); return; }
+        if (!p.contains("useAt")) return;
+        long start = p.getLong("useAt", now);
+        List<String> log = new ArrayList<>();
+        for (String s : p.getString("useLog", "").split(";")) if (!s.isEmpty()) try {
+            if (Long.parseLong(s.substring(s.indexOf('-') + 1)) > now - 3 * 86400000L) log.add(s);
+        } catch (RuntimeException ignored) { }
+        if (now > start) log.add(start + "-" + now);
+        p.edit().putString("useLog", String.join(";", log)).remove("useAt").apply();
+    }
+
+    /** Recorded use sessions, sorted, including one still going on. */
+    List<long[]> useSessions(long now) {
+        List<long[]> r = new ArrayList<>();
+        for (String s : p.getString("useLog", "").split(";")) if (!s.isEmpty()) try {
+            int dash = s.indexOf('-'); r.add(new long[]{Long.parseLong(s.substring(0, dash)), Long.parseLong(s.substring(dash + 1))});
+        } catch (RuntimeException ignored) { }
+        if (p.contains("useAt")) r.add(new long[]{p.getLong("useAt", now), now});
+        r.sort((a, b) -> Long.compare(a[0], b[0]));
+        return r;
+    }
+
+    /**
+     * How the phone was used during the night that began on {@code key}, up to now if it is still
+     * going on. Returns null when use was not being recorded at that time.
+     */
+    NightUse rest(LocalDate key) {
+        if (!p.contains("screenSince")) return null;
+        Policy.Schedule s = schedule(); java.time.ZoneId zone = java.time.ZoneId.systemDefault(); long now = System.currentTimeMillis();
+        long start = key.atTime(s.startTime()).atZone(zone).toInstant().toEpochMilli();
+        long end = (s.start < s.end ? key : key.plusDays(1)).atTime(s.endTime()).atZone(zone).toInstant().toEpochMilli();
+        long from = Math.max(start, p.getLong("screenSince", now)), to = Math.min(end, now);
+        if (to - from < 10 * 60000L) return null;
+        List<long[]> sessions = useSessions(now);
+        return new NightUse(Policy.rest(sessions, from, to), start, end, from, to, sessions);
+    }
+
+    /** One night's phone use, with the raw sessions for drawing a timeline. */
+    static final class NightUse {
+        final Policy.Rest rest; final long start, end, from, to; final List<long[]> sessions;
+        NightUse(Policy.Rest rest, long start, long end, long from, long to, List<long[]> sessions) { this.rest = rest; this.start = start; this.end = end; this.from = from; this.to = to; this.sessions = sessions; }
+        boolean ongoing() { return to < end; }
+    }
+
     boolean once(String key) { if (p.getBoolean(key, false)) return false; p.edit().putBoolean(key, true).apply(); return true; }
 
     /** Drops night records older than 60 days. */

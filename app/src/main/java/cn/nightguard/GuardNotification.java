@@ -84,6 +84,8 @@ final class GuardNotification {
             title = "早安 · 昨晚的守护结果";
             text = "拦下 " + night.blocks + " 次，临时解锁 " + night.unlocks + " 次。今晚再试试一次都不解锁？";
         }
+        Store.NightUse use = store.rest(night.date);
+        if (use != null) text = "昨晚放下手机 " + Policy.duration(use.rest.restMs()) + (use.rest.pickups > 0 ? "，拿起 " + use.rest.pickups + " 次" : "，一次都没拿起") + "。" + text;
         post(MORNING_ID, MORNING, title, text, Notification.CATEGORY_STATUS);
     }
 

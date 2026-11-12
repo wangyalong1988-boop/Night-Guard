@@ -82,6 +82,7 @@ public class MainActivity extends Activity {
 
         renderSetup();
         renderSchedule(schedule);
+        renderRest(schedule);
         renderNights();
 
         card(); heading("限制清单", "管理应用  ›", () -> startActivity(new Intent(this, AppPickerActivity.class)));
@@ -155,6 +156,29 @@ public class MainActivity extends Activity {
         clock = BlueUi.label(this, "", 17, BlueUi.INK, true); clock.setFontFeatureSettings("tnum"); counter.addView(clock); section.addView(counter);
         Policy.Schedule desired = store.desiredSchedule();
         if (!desired.equals(schedule)) { BlueUi.gap(section, 12); section.addView(BlueUi.label(this, "已改为 " + desired.text() + "，今晚 " + schedule.endText() + " 后生效", 12, BlueUi.BLUE, false)); }
+    }
+
+    /** How long the phone was put down during the last night (or tonight so far), with a timeline. */
+    private void renderRest(Policy.Schedule schedule) {
+        LocalDate key = clockNight ? Policy.nightKey(ZonedDateTime.now(), schedule) : store.recentNights(1).get(0).date;
+        Store.NightUse use = store.rest(key);
+        if (use == null) return;
+        Policy.Rest r = use.rest;
+        card(); heading(clockNight ? "今晚到现在" : "昨晚", null, null); BlueUi.gap(section, 10);
+        LinearLayout big = BlueUi.row(this); big.setGravity(Gravity.BOTTOM);
+        big.addView(BlueUi.label(this, "放下手机 ", 14, BlueUi.MUTED, false));
+        TextView hours = BlueUi.label(this, Policy.duration(r.restMs()), 26, BlueUi.INK, true); hours.setFontFeatureSettings("tnum"); big.addView(hours);
+        section.addView(big); BlueUi.gap(section, 8);
+        String detail = r.pickups == 0 ? (use.ongoing() ? "到现在还没有拿起过手机" : "整晚都没有拿起手机")
+                : "拿起 " + r.pickups + " 次 · 共用了 " + Policy.duration(r.usedMs) + " · 最长连续放下 " + Policy.duration(r.longestRestMs);
+        section.addView(BlueUi.label(this, detail, 12, BlueUi.MUTED, false)); BlueUi.gap(section, 14);
+        BlueUi.UseTimeline line = new BlueUi.UseTimeline(this); line.set(use); line.setContentDescription(detail);
+        section.addView(line, new LinearLayout.LayoutParams(-1, dp(14))); BlueUi.gap(section, 6);
+        LinearLayout ends = BlueUi.row(this);
+        ends.addView(BlueUi.label(this, schedule.startText(), 11, BlueUi.MUTED, false), new LinearLayout.LayoutParams(0, -2, 1));
+        TextView legend = BlueUi.label(this, "■ 使用", 11, BlueUi.STAR, false); ends.addView(legend); ends.addView(BlueUi.label(this, "   " + schedule.endText(), 11, BlueUi.MUTED, false));
+        section.addView(ends);
+        if (use.from > use.start) { BlueUi.gap(section, 8); section.addView(BlueUi.label(this, "灰色部分是开始记录之前的时间", 11, BlueUi.MUTED, false)); }
     }
 
     /** Last seven nights as stars: full = no unlock, half = unlocked, dot = not guarded. */

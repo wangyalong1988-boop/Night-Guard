@@ -150,6 +150,29 @@ final class BlueUi {
         }
     }
 
+    /** One night as a band: soft blue where the phone was put down, amber where it was in use, grey where nothing was recorded. */
+    static final class UseTimeline extends View {
+        private final Paint p = new Paint(Paint.ANTI_ALIAS_FLAG); private Store.NightUse use;
+        UseTimeline(Context c) { super(c); setImportantForAccessibility(IMPORTANT_FOR_ACCESSIBILITY_NO); }
+        void set(Store.NightUse value) { use = value; invalidate(); }
+        @Override protected void onDraw(Canvas c) {
+            float w = getWidth(), h = getHeight(), r = h / 2;
+            p.setStyle(Paint.Style.FILL); p.setColor(LINE); c.drawRoundRect(0, 0, w, h, r, r, p);
+            if (use == null || use.end <= use.start) return;
+            double span = use.end - use.start;
+            c.save(); Path clip = new Path(); clip.addRoundRect(0, 0, w, h, r, r, Path.Direction.CW); c.clipPath(clip);
+            p.setColor((BLUE & 0x00ffffff) | (dark ? 0x66000000 : 0x55000000));
+            c.drawRect((float) ((use.from - use.start) / span * w), 0, (float) ((use.to - use.start) / span * w), h, p);
+            p.setColor(STAR); float min = getResources().getDisplayMetrics().density * 2;
+            for (long[] s : use.sessions) {
+                long a = Math.max(s[0], use.from), b = Math.min(s[1], use.to); if (b <= a) continue;
+                float x1 = (float) ((a - use.start) / span * w), x2 = Math.max(x1 + min, (float) ((b - use.start) / span * w));
+                c.drawRect(x1, 0, x2, h, p);
+            }
+            c.restore();
+        }
+    }
+
     /** The night drawn as a line: elapsed part filled, a small moon where "now" is. */
     static final class NightBar extends View {
         private final Paint p = new Paint(Paint.ANTI_ALIAS_FLAG); private float fraction = -1;
