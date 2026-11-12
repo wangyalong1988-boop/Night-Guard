@@ -16,6 +16,7 @@ import java.util.concurrent.*;
 
 public class MainActivity extends Activity {
     private Store store;private LinearLayout root,section,preview;private TextView countdown,clock,phase,appSummary,badge;
+    private boolean clockNight;
     private String target,reasonDraft="",phraseDraft="";
     private EditText reasonInput,phraseInput;
     private TextView interceptionDetail,interceptionState;
@@ -42,7 +43,7 @@ public class MainActivity extends Activity {
     }
     private boolean guardEnabled(){String enabled=Settings.Secure.getString(getContentResolver(),Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES);return enabled!=null&&enabled.contains(getPackageName()+"/");}
     private void render(){
-        captureDraft();reasonInput=null;phraseInput=null;countdown=null;ScrollView scroll=new ScrollView(this);scroll.setFillViewport(true);scroll.setClipToPadding(false);BlueUi.page(this,scroll);
+        clockNight=store.night();store.selected();captureDraft();reasonInput=null;phraseInput=null;countdown=null;ScrollView scroll=new ScrollView(this);scroll.setFillViewport(true);scroll.setClipToPadding(false);BlueUi.page(this,scroll);
         root=BlueUi.column(this);root.setPadding(dp(22),dp(24),dp(22),dp(24));scroll.addView(root);section=root;
         LinearLayout header=BlueUi.row(this);LinearLayout titles=BlueUi.column(this);
         titles.addView(BlueUi.label(this,"夜间守护",26,BlueUi.INK,true));BlueUi.gap(titles,7);titles.addView(BlueUi.label(this,"计划、应用与守护状态",12,BlueUi.MUTED,false));
@@ -71,11 +72,12 @@ public class MainActivity extends Activity {
         for(AppCatalog.Entry e:entries){if(e.browser)browserCount++;if(e.browser||selected.contains(e.pkg))chosen.add(e);}
         appSummary.setText(chosen.size()+" 个应用纳入限制 · 其中 "+browserCount+" 个浏览器自动守护");preview.removeAllViews();
         if(chosen.isEmpty()){preview.addView(BlueUi.link(this,"添加娱乐、社交或游戏应用  →",()->startActivity(new Intent(this,AppPickerActivity.class))));return;}
-        for(int i=0;i<Math.min(chosen.size(),5);i++){
+        int slots=Math.max(1,Math.min(5,(getResources().getConfiguration().screenWidthDp-130)/50));
+        for(int i=0;i<Math.min(chosen.size(),slots);i++){
             AppCatalog.Entry e=chosen.get(i);ImageView icon=new ImageView(this);icon.setImageDrawable(AppCatalog.icon(this,e.pkg));icon.setContentDescription(e.label);icon.setScaleType(ImageView.ScaleType.FIT_CENTER);
             LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(dp(38),dp(38));lp.rightMargin=dp(12);preview.addView(icon,lp);
         }
-        if(chosen.size()>5)preview.addView(BlueUi.label(this,"+"+(chosen.size()-5),14,BlueUi.MUTED,true));
+        if(chosen.size()>slots)preview.addView(BlueUi.label(this,"+"+(chosen.size()-slots),14,BlueUi.MUTED,true));
     }
     private void statusRow(String icon,String title,String detail,String state,Runnable action){
         LinearLayout row=BlueUi.row(this);row.setPadding(0,dp(14),0,dp(14));row.setMinimumHeight(dp(76));row.setBackground(BlueUi.ripple(this,Color.TRANSPARENT,10));
@@ -85,7 +87,7 @@ public class MainActivity extends Activity {
         TextView stateView=BlueUi.label(this,state,12,BlueUi.BLUE,true);row.addView(stateView);if(title.equals("应用拦截")){interceptionDetail=detailView;interceptionState=stateView;}row.addView(new BlueUi.Glyph(this,"next",BlueUi.MUTED),new LinearLayout.LayoutParams(dp(17),dp(17)));row.setOnClickListener(v->action.run());section.addView(row);
     }
     private void refreshClock(){
-        if(clock==null)return;ZonedDateTime now=ZonedDateTime.now();boolean night=Policy.night(now.toLocalTime());
+        if(clock==null)return;ZonedDateTime now=ZonedDateTime.now();boolean night=Policy.night(now.toLocalTime());if(night!=clockNight){render();return;}
         long seconds=Math.max(0,Duration.between(now,Policy.nextBoundary(now)).getSeconds());
         phase.setText(night?"距离解除限制":"距离下次开始");clock.setText(String.format(Locale.ROOT,"%02d:%02d:%02d",seconds/3600,(seconds/60)%60,seconds%60));
         if(interceptionState!=null){interceptionState.setText(GuardService.connected?"已连接":"待检查");interceptionDetail.setText(GuardService.connected?"服务已连接，夜间按清单执行":guardEnabled()?"权限已开启，等待服务连接":"开启后才能限制应用");}

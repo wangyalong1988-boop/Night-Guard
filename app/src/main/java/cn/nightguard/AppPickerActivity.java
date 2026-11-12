@@ -40,7 +40,7 @@ public class AppPickerActivity extends Activity {
         out.putString("filter",filter);out.putString("query",query);out.putBoolean("selected",onlySelected);
     }
     private void build(){
-        LinearLayout page=BlueUi.column(this);BlueUi.page(this,page);
+        LinearLayout page=BlueUi.column(this);page.setFocusableInTouchMode(true);BlueUi.page(this,page);
         LinearLayout header=BlueUi.row(this);header.setPadding(dp(10),dp(12),dp(20),dp(8));
         header.addView(BlueUi.iconButton(this,"back","返回",this::leave));
         LinearLayout titles=BlueUi.column(this);titles.addView(BlueUi.label(this,"限制应用",23,BlueUi.INK,true));BlueUi.gap(titles,5);
