@@ -16,17 +16,21 @@ import java.util.concurrent.*;
 
 public class MainActivity extends Activity {
     private Store store;private LinearLayout root,section,preview;private TextView countdown,clock,phase,appSummary,badge;
-    private String target;
+    private String target,reasonDraft="",phraseDraft="";
+    private EditText reasonInput,phraseInput;
+    private TextView interceptionDetail,interceptionState;
     private final ExecutorService loader=Executors.newSingleThreadExecutor();
     private final Handler handler=new Handler(Looper.getMainLooper());
     private final Runnable timer=new Runnable(){public void run(){if(countdown!=null)refreshCountdown();refreshClock();handler.postDelayed(this,1000);}};
     private int dp(float value){return BlueUi.dp(this,value);}
-    @Override public void onCreate(Bundle state){super.onCreate(state);store=new Store(this);}
-    @Override public void onNewIntent(Intent intent){super.onNewIntent(intent);setIntent(intent);render();}
+    @Override public void onCreate(Bundle state){super.onCreate(state);store=new Store(this);if(state!=null){reasonDraft=state.getString("reasonDraft","");phraseDraft=state.getString("phraseDraft","");}}
+    @Override public void onNewIntent(Intent intent){super.onNewIntent(intent);setIntent(intent);reasonDraft="";phraseDraft="";reasonInput=null;phraseInput=null;render();}
     @Override public void onResume(){super.onResume();GuardService.settingsVisible=true;render();handler.removeCallbacks(timer);handler.post(timer);}
-    @Override public void onPause(){GuardService.settingsVisible=false;handler.removeCallbacks(timer);super.onPause();}
+    @Override public void onSaveInstanceState(Bundle state){captureDraft();state.putString("reasonDraft",reasonDraft);state.putString("phraseDraft",phraseDraft);super.onSaveInstanceState(state);}
+    private void captureDraft(){if(reasonInput!=null)reasonDraft=reasonInput.getText().toString();if(phraseInput!=null)phraseDraft=phraseInput.getText().toString();}
+    @Override public void onPause(){captureDraft();GuardService.settingsVisible=false;handler.removeCallbacks(timer);super.onPause();}
     @Override public void onDestroy(){loader.shutdownNow();handler.removeCallbacks(timer);super.onDestroy();}
-    private TextView text(String value,int size){TextView t=BlueUi.label(this,value,size,size>=18?BlueUi.INK:BlueUi.MUTED,size>=18);section.addView(t);BlueUi.gap(section,10);return t;}
+    private TextView text(String value,int size){TextView t=BlueUi.label(this,value,size,size>=17?BlueUi.INK:BlueUi.MUTED,size>=17);section.addView(t);BlueUi.gap(section,10);return t;}
     private void button(String value,boolean primary,Runnable action){BlueUi.gap(section,10);section.addView(BlueUi.button(this,value,primary,action),new LinearLayout.LayoutParams(-1,-2));}
     private void card(){
         section=BlueUi.column(this);section.setPadding(dp(18),dp(18),dp(18),dp(18));section.setBackground(BlueUi.background(this,Color.WHITE,0,18));
@@ -38,16 +42,16 @@ public class MainActivity extends Activity {
     }
     private boolean guardEnabled(){String enabled=Settings.Secure.getString(getContentResolver(),Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES);return enabled!=null&&enabled.contains(getPackageName()+"/");}
     private void render(){
-        countdown=null;ScrollView scroll=new ScrollView(this);scroll.setFillViewport(true);scroll.setClipToPadding(false);BlueUi.page(this,scroll);
+        captureDraft();reasonInput=null;phraseInput=null;countdown=null;ScrollView scroll=new ScrollView(this);scroll.setFillViewport(true);scroll.setClipToPadding(false);BlueUi.page(this,scroll);
         root=BlueUi.column(this);root.setPadding(dp(22),dp(24),dp(22),dp(24));scroll.addView(root);section=root;
         LinearLayout header=BlueUi.row(this);LinearLayout titles=BlueUi.column(this);
         titles.addView(BlueUi.label(this,"夜间守护",26,BlueUi.INK,true));BlueUi.gap(titles,7);titles.addView(BlueUi.label(this,"计划、应用与守护状态",12,BlueUi.MUTED,false));
-        header.addView(titles,new LinearLayout.LayoutParams(0,-2,1));badge=BlueUi.label(this,"",11,BlueUi.BLUE,true);badge.setPadding(dp(10),dp(6),dp(10),dp(6));badge.setBackground(BlueUi.background(this,BlueUi.PALE,0,8));header.addView(badge);root.addView(header);
+        header.addView(titles,new LinearLayout.LayoutParams(0,-2,1));badge=BlueUi.label(this,"",12,BlueUi.BLUE,true);badge.setPadding(dp(10),dp(6),dp(10),dp(6));badge.setBackground(BlueUi.background(this,BlueUi.PALE,0,8));header.addView(badge);root.addView(header);
         target=getIntent().getStringExtra("target");if(target==null)target=store.p.getString("request",null);if(target!=null&&!Apps.safe(this,target))renderUnlock();
         card();section.setBackground(BlueUi.background(this,0xffdfeafa,0,18));
         LinearLayout heroHead=BlueUi.row(this);heroHead.addView(BlueUi.label(this,"每日限制时段",13,BlueUi.BLUE,true),new LinearLayout.LayoutParams(0,-2,1));heroHead.addView(new BlueUi.Glyph(this,"moon",BlueUi.BLUE),new LinearLayout.LayoutParams(dp(22),dp(22)));section.addView(heroHead);BlueUi.gap(section,20);
         TextView schedule=BlueUi.label(this,"01:00  –  08:00",32,BlueUi.INK,true);schedule.setTypeface(Typeface.create("sans-serif",Typeface.NORMAL));section.addView(schedule);BlueUi.gap(section,14);
-        LinearLayout timeline=BlueUi.row(this);View blue=new View(this);blue.setBackground(BlueUi.background(this,BlueUi.BLUE,0,2));timeline.addView(blue,new LinearLayout.LayoutParams(0,dp(3),7));View pale=new View(this);pale.setBackgroundColor(0xffc9d9ee);timeline.addView(pale,new LinearLayout.LayoutParams(0,dp(3),3));section.addView(timeline);BlueUi.gap(section,14);
+        LinearLayout timeline=BlueUi.row(this);View blue=new View(this);blue.setBackground(BlueUi.background(this,BlueUi.BLUE,0,2));timeline.addView(blue,new LinearLayout.LayoutParams(-1,dp(2)));section.addView(timeline);BlueUi.gap(section,14);
         LinearLayout counter=BlueUi.row(this);phase=BlueUi.label(this,"",12,BlueUi.MUTED,false);counter.addView(phase,new LinearLayout.LayoutParams(0,-2,1));clock=BlueUi.label(this,"",17,BlueUi.INK,true);clock.setTypeface(Typeface.create("sans-serif-medium",Typeface.NORMAL));counter.addView(clock);section.addView(counter);refreshClock();
         card();LinearLayout range=BlueUi.row(this);range.addView(BlueUi.label(this,"限制清单",17,BlueUi.INK,true),new LinearLayout.LayoutParams(0,-2,1));range.addView(BlueUi.link(this,"管理应用  ›",()->startActivity(new Intent(this,AppPickerActivity.class))));section.addView(range);
         appSummary=BlueUi.label(this,"正在读取已选应用…",13,BlueUi.MUTED,false);section.addView(appSummary);BlueUi.gap(section,14);preview=BlueUi.row(this);section.addView(preview);
@@ -77,13 +81,14 @@ public class MainActivity extends Activity {
         LinearLayout row=BlueUi.row(this);row.setPadding(0,dp(14),0,dp(14));row.setMinimumHeight(dp(76));row.setBackground(BlueUi.ripple(this,Color.TRANSPARENT,10));
         row.addView(new BlueUi.Glyph(this,icon,BlueUi.BLUE),new LinearLayout.LayoutParams(dp(21),dp(21)));
         LinearLayout labels=BlueUi.column(this);LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,-2,1);lp.setMargins(dp(13),0,dp(6),0);row.addView(labels,lp);
-        labels.addView(BlueUi.label(this,title,15,BlueUi.INK,true));BlueUi.gap(labels,6);labels.addView(BlueUi.label(this,detail,11,BlueUi.MUTED,false));
-        row.addView(BlueUi.label(this,state,11,BlueUi.BLUE,true));row.addView(new BlueUi.Glyph(this,"next",BlueUi.MUTED),new LinearLayout.LayoutParams(dp(17),dp(17)));row.setOnClickListener(v->action.run());section.addView(row);
+        labels.addView(BlueUi.label(this,title,16,BlueUi.INK,true));BlueUi.gap(labels,6);TextView detailView=BlueUi.label(this,detail,12,BlueUi.MUTED,false);labels.addView(detailView);
+        TextView stateView=BlueUi.label(this,state,12,BlueUi.BLUE,true);row.addView(stateView);if(title.equals("应用拦截")){interceptionDetail=detailView;interceptionState=stateView;}row.addView(new BlueUi.Glyph(this,"next",BlueUi.MUTED),new LinearLayout.LayoutParams(dp(17),dp(17)));row.setOnClickListener(v->action.run());section.addView(row);
     }
     private void refreshClock(){
         if(clock==null)return;ZonedDateTime now=ZonedDateTime.now();boolean night=Policy.night(now.toLocalTime());
         long seconds=Math.max(0,Duration.between(now,Policy.nextBoundary(now)).getSeconds());
         phase.setText(night?"距离解除限制":"距离下次开始");clock.setText(String.format(Locale.ROOT,"%02d:%02d:%02d",seconds/3600,(seconds/60)%60,seconds%60));
+        if(interceptionState!=null){interceptionState.setText(GuardService.connected?"已连接":"待检查");interceptionDetail.setText(GuardService.connected?"服务已连接，夜间按清单执行":guardEnabled()?"权限已开启，等待服务连接":"开启后才能限制应用");}
         badge.setText(GuardService.connected?(night?"限制时段":"等待夜间"):"尚未就绪");
     }
     private void accessibilitySettings(){new AlertDialog.Builder(this).setTitle("开启应用拦截").setMessage("在系统无障碍设置中开启“夜间守护”。仅观察前台应用包名并显示遮罩，不读取网页、聊天或密码。")
@@ -111,33 +116,33 @@ public class MainActivity extends Activity {
         }
     }
     private void renderUnlock() {
-        card(); text("给自己十分钟，再做决定",21);
+        card(); text("申请临时使用",18);
         String name = target;
         try { name = getPackageManager().getApplicationLabel(getPackageManager().getApplicationInfo(target,0)).toString(); }
         catch (PackageManager.NameNotFoundException ignored) { }
         text(name+" · 验证后仅开放5分钟",14);
         if (!target.equals(store.p.getString("request",""))) {
-            EditText reason = input("写下具体使用原因（至少10字）");
+            EditText reason = input("写下具体使用原因（至少10字）");reasonInput=reason;reason.setText(reasonDraft);
             button("开始10分钟冷静期",true,()->{
                 String value = reason.getText().toString().trim();
                 if(value.length()<10) { reason.setError("请填写至少10字的具体原因");return; }
-                store.begin(target,value);render();
+                store.begin(target,value);reasonDraft="";reasonInput=null;render();
             });
         } else {
             countdown = text("",18);refreshCountdown();
             text("冷静期结束后，手动输入完整验证句：",14);
             TextView challenge = text(store.p.getString("phrase",""),18);challenge.setTextIsSelectable(false);
-            EditText phrase = input("完整输入长句与随机数字");phrase.setLongClickable(false);
+            EditText phrase = input("完整输入长句与随机数字");phraseInput=phrase;phrase.setText(phraseDraft);phrase.setLongClickable(false);
             phrase.setInputType(android.text.InputType.TYPE_CLASS_TEXT|android.text.InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
             button("完成验证，临时开放",true,()->{
                 if(store.unlock(target,phrase.getText().toString())) {
-                    String pkg=target;getIntent().removeExtra("target");target=null;render();
+                    String pkg=target;getIntent().removeExtra("target");target=null;reasonDraft="";phraseDraft="";reasonInput=null;phraseInput=null;render();
                     Intent launch=getPackageManager().getLaunchIntentForPackage(pkg);if(launch!=null)startActivity(launch);
                 } else Toast.makeText(this,"冷静期未结束，或验证句不一致",Toast.LENGTH_LONG).show();
             });
             button("取消申请，继续休息",false,()->{
                 store.p.edit().remove("request").remove("start").remove("phrase").commit();
-                getIntent().removeExtra("target");target=null;render();
+                getIntent().removeExtra("target");target=null;reasonDraft="";phraseDraft="";reasonInput=null;phraseInput=null;render();
             });
         }
     }
