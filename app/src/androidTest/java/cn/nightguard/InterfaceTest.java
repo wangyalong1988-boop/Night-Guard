@@ -30,7 +30,14 @@ public class InterfaceTest {
             while(!ready[0]&&android.os.SystemClock.elapsedRealtime()<deadline){scenario.onActivity(a->ready[0]=a.selection!=null);if(!ready[0])Thread.sleep(100);}
             assertTrue("Installed application list loads",ready[0]);
             scenario.onActivity(a->{new Store(a).p.edit().remove("apps").remove("pending").apply();a.showEntries(fixtures());});
+            scenario.onActivity(a->{View title=findText(a.getWindow().getDecorView(),"限制应用");android.graphics.Rect bounds=new android.graphics.Rect();assertNotNull(title);assertTrue("Picker title is visible",title.getGlobalVisibleRect(bounds)&&bounds.width()>0);});
             capture("apps-all.png");
+            scenario.onActivity(a->{View search=findDescription(a.getWindow().getDecorView(),"搜索应用");search.requestFocus();a.getSystemService(android.view.inputmethod.InputMethodManager.class).showSoftInput(search,android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT);});
+            settle();Thread.sleep(500);
+            scenario.onActivity(a->{android.graphics.Rect bounds=new android.graphics.Rect();View save=findText(a.getWindow().getDecorView(),"保存限制清单");assertTrue("Save remains visible with keyboard",save.getGlobalVisibleRect(bounds)&&bounds.height()>0);ListView list=findList(a.getWindow().getDecorView());assertNotNull(list);assertTrue("Search results retain usable space",list.getHeight()>=BlueUi.dp(a,70));});
+            capture("apps-keyboard.png");
+            scenario.onActivity(a->a.getSystemService(android.view.inputmethod.InputMethodManager.class).hideSoftInputFromWindow(a.getWindow().getDecorView().getWindowToken(),0));
+            settle();
             scenario.onActivity(a->{View search=findDescription(a.getWindow().getDecorView(),"搜索应用");((EditText)search).setText("视频");});
             settle();scenario.onActivity(a->{assertNotNull(findText(a.getWindow().getDecorView(),"云端视频"));View row=findDescriptionPrefix(a.getWindow().getDecorView(),"云端视频，");assertNotNull(row);row.performClick();assertTrue(a.selection.checked("fixture.video"));});
             capture("apps-search.png");
@@ -79,6 +86,7 @@ public class InterfaceTest {
             return output.toByteArray();
         }
     }
+    private static ListView findList(View v){if(v instanceof ListView)return (ListView)v;return (ListView)children(v,InterfaceTest::findList);}
     private static View findText(View view,String text){if(view instanceof TextView&&((TextView)view).getText().toString().equals(text))return view;return children(view,v->findText(v,text));}
     private static View findDescription(View view,String text){if(text.contentEquals(view.getContentDescription()==null?"":view.getContentDescription()))return view;return children(view,v->findDescription(v,text));}
     private static View findDescriptionPrefix(View view,String text){if(view.getContentDescription()!=null&&view.getContentDescription().toString().startsWith(text))return view;return children(view,v->findDescriptionPrefix(v,text));}

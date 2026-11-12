@@ -31,7 +31,7 @@ final class BlueUi {
     static void gap(LinearLayout parent,int height){View space=new View(parent.getContext());parent.addView(space,new LinearLayout.LayoutParams(1,dp(parent.getContext(),height)));}
     static void divider(LinearLayout parent){View v=new View(parent.getContext());v.setBackgroundColor(LINE);parent.addView(v,new LinearLayout.LayoutParams(-1,dp(parent.getContext(),1)));}
     static void page(Activity activity,View body){
-        body.setBackgroundColor(PAGE);activity.setContentView(body);
+        activity.getWindow().setDecorFitsSystemWindows(false);body.setBackgroundColor(PAGE);activity.setContentView(body);
         body.setOnApplyWindowInsetsListener((v,insets)->{
             Insets bars=insets.getInsets(WindowInsets.Type.systemBars()|WindowInsets.Type.ime());
             v.setPadding(bars.left,bars.top,bars.right,bars.bottom);return WindowInsets.CONSUMED;

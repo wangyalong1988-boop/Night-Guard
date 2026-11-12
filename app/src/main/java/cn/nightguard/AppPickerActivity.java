@@ -20,7 +20,7 @@ public class AppPickerActivity extends Activity {
     private Set<String> restored;
     private String filter=AppCategory.ALL,query="";
     private boolean onlySelected=false;
-    private ListView list;private EditText search;private LinearLayout chips;
+    private ListView list;private EditText search;private LinearLayout chips,filters;
     private TextView summary,results,empty,selectedTab;private Button save;
     private final Rows adapter=new Rows();
     private int dp(float v){return BlueUi.dp(this,v);}
@@ -44,7 +44,7 @@ public class AppPickerActivity extends Activity {
         LinearLayout header=BlueUi.row(this);header.setPadding(dp(10),dp(12),dp(20),dp(8));
         header.addView(BlueUi.iconButton(this,"back","返回",this::leave));
         LinearLayout titles=BlueUi.column(this);titles.addView(BlueUi.label(this,"限制应用",23,BlueUi.INK,true));BlueUi.gap(titles,5);
-        titles.addView(BlueUi.label(this,"按类别挑选，夜间自动限制",12,BlueUi.MUTED,false));header.addView(titles);page.addView(header);
+        titles.addView(BlueUi.label(this,"按类别挑选，夜间自动限制",12,BlueUi.MUTED,false));header.addView(titles,new LinearLayout.LayoutParams(0,-2,1));page.addView(header);
         LinearLayout searchBox=BlueUi.row(this);searchBox.setPadding(dp(14),0,dp(8),0);searchBox.setBackground(BlueUi.background(this,Color.WHITE,BlueUi.LINE,12));
         searchBox.addView(new BlueUi.Glyph(this,"search",BlueUi.MUTED),new LinearLayout.LayoutParams(dp(19),dp(19)));
         search=new EditText(this);search.setSingleLine();search.setTextSize(15);search.setTextColor(BlueUi.INK);search.setHintTextColor(BlueUi.MUTED);
@@ -53,19 +53,21 @@ public class AppPickerActivity extends Activity {
         searchBox.addView(BlueUi.link(this,"清除",()->search.setText("")));
         LinearLayout.LayoutParams searchLp=new LinearLayout.LayoutParams(-1,-2);searchLp.setMargins(dp(20),dp(12),dp(20),dp(8));page.addView(searchBox,searchLp);
         search.setText(query);search.addTextChangedListener(new TextWatcher(){public void beforeTextChanged(CharSequence s,int st,int count,int after){}public void onTextChanged(CharSequence s,int st,int before,int count){query=s.toString();refresh();}public void afterTextChanged(Editable e){}});
+        filters=BlueUi.column(this);page.addView(filters);
         HorizontalScrollView categories=new HorizontalScrollView(this);categories.setHorizontalScrollBarEnabled(false);
-        chips=BlueUi.row(this);chips.setPadding(dp(20),dp(4),dp(12),dp(10));categories.addView(chips);page.addView(categories);
+        chips=BlueUi.row(this);chips.setPadding(dp(20),dp(4),dp(12),dp(10));categories.addView(chips);filters.addView(categories);
         LinearLayout tools=BlueUi.row(this);tools.setPadding(dp(20),0,dp(12),dp(4));
         selectedTab=BlueUi.link(this,"只看已选",()->{onlySelected=!onlySelected;refresh();});tools.addView(selectedTab);
         View stretch=new View(this);tools.addView(stretch,new LinearLayout.LayoutParams(0,1,1));
-        tools.addView(BlueUi.link(this,"全选结果",()->bulk(true)));tools.addView(BlueUi.link(this,"清空结果",()->bulk(false)));page.addView(tools);
-        results=BlueUi.label(this,"正在读取应用…",12,BlueUi.MUTED,false);results.setPadding(dp(24),dp(4),dp(24),dp(10));page.addView(results);
+        tools.addView(BlueUi.link(this,"全选结果",()->bulk(true)));tools.addView(BlueUi.link(this,"清空结果",()->bulk(false)));filters.addView(tools);
+        results=BlueUi.label(this,"正在读取应用…",12,BlueUi.MUTED,false);results.setPadding(dp(24),dp(4),dp(24),dp(10));filters.addView(results);
         FrameLayout content=new FrameLayout(this);list=new ListView(this);list.setDivider(null);list.setClipToPadding(false);list.setPadding(dp(16),0,dp(16),dp(12));list.setAdapter(adapter);
         content.addView(list,new FrameLayout.LayoutParams(-1,-1));empty=BlueUi.label(this,"正在读取应用…",15,BlueUi.MUTED,false);empty.setGravity(Gravity.CENTER);empty.setPadding(dp(24),0,dp(24),0);content.addView(empty,new FrameLayout.LayoutParams(-1,-1));page.addView(content,new LinearLayout.LayoutParams(-1,0,1));
         LinearLayout footer=BlueUi.column(this);footer.setBackgroundColor(Color.WHITE);footer.setPadding(dp(20),dp(12),dp(20),dp(16));
         summary=BlueUi.label(this,"正在读取应用…",13,BlueUi.INK,true);footer.addView(summary);BlueUi.gap(footer,5);
         footer.addView(BlueUi.label(this,store.night()?"夜间减少限制，将在08:00后生效":"浏览器自动限制；电话、闹钟等核心应用已保留",11,BlueUi.MUTED,false));BlueUi.gap(footer,12);
         save=BlueUi.button(this,"保存限制清单",true,this::save);save.setEnabled(false);footer.addView(save,new LinearLayout.LayoutParams(-1,-2));page.addView(footer);
+        page.setOnApplyWindowInsetsListener((v,insets)->{android.graphics.Insets bars=insets.getInsets(WindowInsets.Type.systemBars()|WindowInsets.Type.ime());v.setPadding(bars.left,bars.top,bars.right,bars.bottom);filters.setVisibility(insets.isVisible(WindowInsets.Type.ime())?View.GONE:View.VISIBLE);return WindowInsets.CONSUMED;});
     }
     /** Production data-binding seam also used by emulator UI tests with explicit fixtures. */
     void showEntries(List<AppCatalog.Entry> data){
