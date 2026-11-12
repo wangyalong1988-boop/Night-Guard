@@ -56,6 +56,7 @@ public class GuardService extends AccessibilityService {
         boolean using = getSystemService(PowerManager.class).isInteractive() && (keyguard == null || !keyguard.isKeyguardLocked());
         store.p.edit().remove("useAt").apply(); // a session left open by a killed service cannot be trusted
         store.screenUse(using, System.currentTimeMillis());
+        releaseAudio(); // in case a previous run was stopped while it had media muted
         store.prune(); check();
     }
 
@@ -132,7 +133,7 @@ public class GuardService extends AccessibilityService {
         if (target != null && SystemClock.elapsedRealtime() < quietUntil && !target.equals(coverPkg)) target = null;
         if (target == null) hide();
         else if (cover == null || !target.equals(coverPkg) || !why.equals(coverReason)) { hide(); show(target, why, schedule, windows > 1); }
-        else cover.tick(now);
+        else { cover.tick(now); muteMedia(); } // if the app starts playing again behind the cover
         if (notification != null) notification.refresh(store, schedule, now);
         if (SystemClock.elapsedRealtime() - widgetAt >= WIDGET_MS) { widgetAt = SystemClock.elapsedRealtime(); TodayWidget.update(this, store); }
         handler.postDelayed(tick, nextDelay(night, now, schedule));
@@ -167,14 +168,59 @@ public class GuardService extends AccessibilityService {
         WindowManager.LayoutParams lp = new WindowManager.LayoutParams(-1, -1, WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
                 WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN | WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS, PixelFormat.OPAQUE);
         lp.layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS;
-        try { wm.addView(next.root, lp); cover = next; coverPkg = pkg; coverReason = why; coverShownAt = SystemClock.elapsedRealtime(); }
+        try { wm.addView(next.root, lp); cover = next; coverPkg = pkg; coverReason = why; coverShownAt = SystemClock.elapsedRealtime(); silence(); }
         catch (RuntimeException e) { performGlobalAction(GLOBAL_ACTION_HOME); }
+    }
+
+    // ---- Silence the covered app ----------------------------------------------------------
+    // A cover is only a window on top: the app underneath keeps running, so its video would keep
+    // playing. Take audio focus (video apps pause when they lose it), press "pause" like a headset
+    // does, and as a last resort mute media volume until the cover goes away.
+
+    private android.media.AudioFocusRequest focus;
+    private final Runnable muteIfStillPlaying = () -> { if (cover != null) muteMedia(); };
+
+    private void silence() {
+        android.media.AudioManager audio = getSystemService(android.media.AudioManager.class);
+        if (audio == null) return;
+        if (focus == null) {
+            focus = new android.media.AudioFocusRequest.Builder(android.media.AudioManager.AUDIOFOCUS_GAIN)
+                    .setAudioAttributes(new android.media.AudioAttributes.Builder().setUsage(android.media.AudioAttributes.USAGE_MEDIA)
+                            .setContentType(android.media.AudioAttributes.CONTENT_TYPE_MOVIE).build())
+                    .setOnAudioFocusChangeListener(change -> { }).build();
+            try { audio.requestAudioFocus(focus); } catch (RuntimeException ignored) { }
+        }
+        if (audio.isMusicActive()) {
+            long t = SystemClock.uptimeMillis();
+            audio.dispatchMediaKeyEvent(new android.view.KeyEvent(t, t, android.view.KeyEvent.ACTION_DOWN, android.view.KeyEvent.KEYCODE_MEDIA_PAUSE, 0));
+            audio.dispatchMediaKeyEvent(new android.view.KeyEvent(t, t, android.view.KeyEvent.ACTION_UP, android.view.KeyEvent.KEYCODE_MEDIA_PAUSE, 0));
+        }
+        handler.removeCallbacks(muteIfStillPlaying); handler.postDelayed(muteIfStillPlaying, 800);
+    }
+
+    private void muteMedia() {
+        android.media.AudioManager audio = getSystemService(android.media.AudioManager.class);
+        if (audio == null || store.p.getBoolean("mutedByGuard", false) || !audio.isMusicActive()) return;
+        try { audio.adjustStreamVolume(android.media.AudioManager.STREAM_MUSIC, android.media.AudioManager.ADJUST_MUTE, 0); store.p.edit().putBoolean("mutedByGuard", true).commit(); }
+        catch (RuntimeException ignored) { } // Do Not Disturb can refuse volume changes
+    }
+
+    /** Gives audio back once nothing is covered; also undoes a mute left behind by a stopped service. */
+    private void releaseAudio() {
+        handler.removeCallbacks(muteIfStillPlaying);
+        android.media.AudioManager audio = getSystemService(android.media.AudioManager.class);
+        if (audio == null) return;
+        if (focus != null) { try { audio.abandonAudioFocusRequest(focus); } catch (RuntimeException ignored) { } focus = null; }
+        if (store != null && store.p.getBoolean("mutedByGuard", false)) {
+            try { audio.adjustStreamVolume(android.media.AudioManager.STREAM_MUSIC, android.media.AudioManager.ADJUST_UNMUTE, 0); } catch (RuntimeException ignored) { }
+            store.p.edit().remove("mutedByGuard").commit();
+        }
     }
 
     private void goHome() { current = ""; quietUntil = SystemClock.elapsedRealtime() + QUIET_AFTER_HOME_MS; hide(); trackApp(System.currentTimeMillis()); performGlobalAction(GLOBAL_ACTION_HOME); }
 
     private void hide() {
-        if (cover != null) { try { wm.removeView(cover.root); } catch (RuntimeException ignored) { } cover = null; coverPkg = null; coverReason = null; }
+        if (cover != null) { try { wm.removeView(cover.root); } catch (RuntimeException ignored) { } cover = null; coverPkg = null; coverReason = null; releaseAudio(); }
     }
 
     @Override public void onInterrupt() { }
