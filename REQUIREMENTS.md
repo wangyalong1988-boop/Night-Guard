@@ -1,6 +1,6 @@
 # 夜间守护 Night Guard
 
-状态：需求草案；尚未实现、编译或真机验证。
+状态：首版已实现并接入CI；构建结果以GitHub Actions为准，尚未真机验证。
 
 ## 设备与范围
 来源：hola-espanol/REQUIREMENTS.md，华为 Android 手机，Android 12/API 31 兼容，无 Google Play 服务依赖。确切型号和系统版本未记录，不假定为 HarmonyOS NEXT。
