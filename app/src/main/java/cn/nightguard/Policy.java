@@ -216,6 +216,30 @@ public final class Policy {
 
     public static boolean limitReached(long usedMs, Integer limitMinutes) { return limitMinutes != null && limitMinutes > 0 && usedMs >= limitMinutes * 60000L; }
 
+    /** An app lock warns once when this much of the day's time is left. */
+    public static final long LIMIT_WARN_MS = 5 * 60 * 1000L;
+    /** Shortest and longest daily time an app lock allows, in minutes. */
+    public static final int LIMIT_MIN = 5, LIMIT_MAX = 8 * 60;
+
+    /** True while there is time left but no more than {@link #LIMIT_WARN_MS}. */
+    public static boolean limitWarning(long usedMs, Integer limitMinutes) {
+        if (limitMinutes == null || limitMinutes <= 0) return false;
+        long left = limitMinutes * 60000L - usedMs;
+        return left > 0 && left <= LIMIT_WARN_MS;
+    }
+
+    /** Clamps a chosen lock time to whole five minutes within the allowed range. */
+    public static int limitMinutes(int hours, int minutes) {
+        int total = Math.max(0, hours) * 60 + Math.max(0, minutes);
+        total = Math.round(total / 5f) * 5;
+        return Math.max(LIMIT_MIN, Math.min(LIMIT_MAX, total));
+    }
+
+    /** How full an app's day is, 0..1, for its progress line. */
+    public static double limitFraction(long usedMs, int limitMinutes) {
+        return limitMinutes <= 0 ? 0 : Math.max(0, Math.min(1, usedMs / (limitMinutes * 60000.0)));
+    }
+
     /** "6小时12分", "45分钟", "不到1分钟". */
     public static String duration(long ms) {
         long minutes = ms / 60000;

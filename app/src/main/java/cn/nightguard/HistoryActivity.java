@@ -1,7 +1,6 @@
 package cn.nightguard;
 
 import android.app.Activity;
-import android.app.AlertDialog;
 import android.os.Bundle;
 import android.view.Gravity;
 import android.view.View;
@@ -27,34 +26,18 @@ public class HistoryActivity extends Activity {
 
     private LinearLayout root, section;
 
-    private void card() {
-        section = BlueUi.column(this); section.setPadding(dp(18), dp(18), dp(18), dp(18)); section.setBackground(BlueUi.background(this, BlueUi.CARD, 0, 18));
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2); lp.topMargin = dp(14); root.addView(section, lp);
-    }
+    private void card(String title) { BlueUi.sectionHeader(root, title, null, null); section = BlueUi.group(root, true); }
 
     private void render() {
         BlueUi.use(this);
         ScrollView scroll = new ScrollView(this); BlueUi.page(this, scroll);
-        root = BlueUi.column(this); root.setPadding(dp(12), dp(12), dp(22), dp(28)); scroll.addView(root);
-        LinearLayout header = BlueUi.row(this); header.addView(BlueUi.iconButton(this, "back", "返回", this::finish));
-        LinearLayout titles = BlueUi.column(this); titles.addView(BlueUi.label(this, "用机记录", 23, BlueUi.INK, true)); BlueUi.gap(titles, 5);
-        titles.addView(BlueUi.label(this, "少一点点，也是进步", 12, BlueUi.MUTED, false));
-        header.addView(titles, new LinearLayout.LayoutParams(0, -2, 1)); root.addView(header);
-
-        LinearLayout tabs = BlueUi.row(this); tabs.setPadding(dp(10), dp(14), 0, 0);
-        for (int n : new int[]{7, 30}) {
-            boolean on = n == span;
-            TextView tab = BlueUi.label(this, n == 7 ? "近 7 天" : "近 30 天", 13, on ? BlueUi.ON_BLUE : BlueUi.MUTED, on);
-            tab.setGravity(Gravity.CENTER); tab.setMinHeight(dp(36)); tab.setPadding(dp(16), 0, dp(16), 0);
-            tab.setBackground(BlueUi.ripple(this, on ? BlueUi.BLUE : BlueUi.CARD, 10)); tab.setOnClickListener(v -> { span = n; render(); });
-            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-2, -2); lp.rightMargin = dp(8); tabs.addView(tab, lp);
-        }
-        root.addView(tabs);
-        LinearLayout body = BlueUi.column(this); body.setPadding(dp(10), 0, 0, 0); root.addView(body); root = body;
+        LinearLayout page = BlueUi.column(this); scroll.addView(page);
+        page.addView(BlueUi.navBar(this, "用机记录", "少一点点，也是进步"));
+        root = BlueUi.column(this); root.setPadding(dp(20), dp(10), dp(20), dp(32)); page.addView(root);
+        root.addView(BlueUi.segmented(this, new String[]{"近 7 天", "近 30 天"}, span == 7 ? 0 : 1, i -> { span = i == 0 ? 7 : 30; render(); }), new LinearLayout.LayoutParams(-1, -2));
 
         screenTime(); apps(); nights();
-        TextView note = BlueUi.label(this, "只统计守护服务运行期间：从解锁屏幕到息屏算作使用，来通知亮屏不算。数据只存在这台手机里。", 11, BlueUi.MUTED, false);
-        note.setPadding(dp(4), dp(16), dp(4), 0); root.addView(note);
+        BlueUi.footnote(root, "只统计守护服务运行期间：从解锁屏幕到屏幕熄灭算作使用，来通知亮屏不算。数据只存在这台手机里。");
     }
 
     private String dayLabel(LocalDate d, int i, int n) {
@@ -81,19 +64,16 @@ public class HistoryActivity extends Activity {
         long sumBefore = 0; int nBefore = 0;
         for (Store.Day d : before) if (d.recorded) { sumBefore += d.useMs; nBefore++; }
 
-        card();
-        section.addView(BlueUi.label(this, "每天亮屏时间", 17, BlueUi.INK, true)); BlueUi.gap(section, 8);
-        if (n == 0) section.addView(BlueUi.label(this, "记录满一天后，这里会显示每天的用机时间。", 12, BlueUi.MUTED, false));
-        else {
+        if (n > 0) {
             double avg = (double) sum / n; Integer change = nBefore >= 3 ? Policy.change((double) sumBefore / nBefore, avg) : null;
-            LinearLayout big = BlueUi.row(this); big.setGravity(Gravity.BOTTOM);
-            big.addView(BlueUi.label(this, "日均 ", 13, BlueUi.MUTED, false));
-            big.addView(BlueUi.label(this, Policy.duration((long) avg), 24, BlueUi.INK, true));
-            if (change != null) big.addView(BlueUi.label(this, "   " + (change <= 0 ? "比之前少 " + (-change) + "%" : "比之前多 " + change + "%"), 13, change <= 0 ? BlueUi.BLUE : BlueUi.MUTED, true));
-            section.addView(big); BlueUi.gap(section, 6);
-            section.addView(BlueUi.label(this, "每天拿起手机约 " + Math.round((double) picks / n) + " 次" + (best != null ? " · 最少的一天是 " + best.date.getMonthValue() + "月" + best.date.getDayOfMonth() + "日，" + Policy.duration(best.useMs) : ""), 12, BlueUi.MUTED, false));
+            BlueUi.gap(root, 16);
+            BlueUi.tiles(root,
+                    BlueUi.statTile(this, "日均亮屏", Policy.duration((long) avg), change == null ? "还没有可比较的数据" : change <= 0 ? "比之前少 " + (-change) + "%" : "比之前多 " + change + "%"),
+                    BlueUi.statTile(this, "日均拿起", Math.round((double) picks / n) + " 次", "从解锁开始算"),
+                    BlueUi.statTile(this, "最少的一天", best != null ? Policy.duration(best.useMs) : "—", best != null ? best.date.getMonthValue() + "月" + best.date.getDayOfMonth() + "日" : ""));
         }
-        BlueUi.gap(section, 16);
+        card("每天亮屏时间");
+        if (n == 0) { section.addView(BlueUi.label(this, "记录满一天后，这里会显示每天的用机时间。", 12, BlueUi.MUTED, false)); BlueUi.gap(section, 12); }
         BarChart chart = new BarChart(this);
         chart.set(values, labels, anyGoal ? goals : null, span - 1, new BarChart.Format() {
             public String value(double v) { return Policy.duration((long) v); }
@@ -115,10 +95,9 @@ public class HistoryActivity extends Activity {
     private void apps() {
         Map<String, Long> totals = store.appTotals(span), today = store.appTimes(LocalDate.now()); Map<String, Integer> limits = store.desiredLimits();
         List<Map.Entry<String, Long>> rows = new ArrayList<>(totals.entrySet()); rows.sort((a, b) -> Long.compare(b.getValue(), a.getValue()));
-        card();
-        section.addView(BlueUi.label(this, "按应用", 17, BlueUi.INK, true)); BlueUi.gap(section, 8);
+        card("按应用");
         if (rows.isEmpty()) { section.addView(BlueUi.label(this, "用一会儿手机后，这里会按应用列出用时。", 12, BlueUi.MUTED, false)); return; }
-        section.addView(BlueUi.label(this, "近 " + span + " 天日均用时。点应用设置每日限额：用满后白天也会拦下，放宽限额要到明天才生效。", 12, BlueUi.MUTED, false));
+        section.addView(BlueUi.label(this, "近 " + span + " 天日均用时。点应用可以加应用锁：每天用满就锁到明天。", 12, BlueUi.MUTED, false));
         BlueUi.gap(section, 10);
         long max = rows.get(0).getValue();
         for (int i = 0; i < Math.min(8, rows.size()); i++) {
@@ -132,31 +111,18 @@ public class HistoryActivity extends Activity {
             LinearLayout track = BlueUi.row(this); track.setBackground(BlueUi.background(this, BlueUi.LINE, 0, 3)); track.setWeightSum(1000);
             View fill = new View(this); fill.setBackground(BlueUi.background(this, BlueUi.BLUE, 0, 3));
             track.addView(fill, new LinearLayout.LayoutParams(0, dp(6), Math.max(12, rows.get(i).getValue() * 1000 / Math.max(1, max)))); col.addView(track, new LinearLayout.LayoutParams(-1, dp(6))); BlueUi.gap(col, 6);
-            col.addView(BlueUi.label(this, "今天 " + Policy.duration(now == null ? 0 : now) + (limit != null ? " · 限额 " + Policy.duration(limit * 60000L) : " · 点击设置限额"), 11, limit != null ? BlueUi.BLUE : BlueUi.MUTED, false));
-            row.setContentDescription(name + "，日均" + Policy.duration(avg) + (limit != null ? "，限额" + Policy.duration(limit * 60000L) : ""));
-            row.setOnClickListener(v -> chooseLimit(pkg, name, limit));
+            col.addView(BlueUi.label(this, "今天 " + Policy.duration(now == null ? 0 : now) + (limit != null ? " · 应用锁 每天 " + Policy.duration(limit * 60000L) : " · 点击加锁"), 11, limit != null ? BlueUi.BLUE : BlueUi.MUTED, false));
+            row.setContentDescription(name + "，日均" + Policy.duration(avg) + (limit != null ? "，应用锁每天" + Policy.duration(limit * 60000L) : ""));
+            row.setOnClickListener(v -> Locks.edit(this, store, pkg, this::render));
             section.addView(row);
         }
-    }
-
-    private void chooseLimit(String pkg, String name, Integer current) {
-        int[] options = {0, 15, 30, 45, 60, 90, 120}; String[] names = new String[options.length];
-        for (int i = 0; i < options.length; i++) names[i] = options[i] == 0 ? "不限" : "每天 " + Policy.duration(options[i] * 60000L);
-        int checked = 0; for (int i = 0; i < options.length; i++) if (current != null && options[i] == current) checked = i;
-        new AlertDialog.Builder(this).setTitle("“" + name + "”每天最多用多久？").setSingleChoiceItems(names, checked, (d, which) -> {
-            d.dismiss();
-            boolean now = store.setLimit(pkg, options[which]);
-            Toast.makeText(this, now ? (options[which] == 0 ? "已取消限额" : "已设为每天 " + Policy.duration(options[which] * 60000L)) : "放宽的限额明天生效，今天仍按原来的", Toast.LENGTH_LONG).show();
-            render();
-        }).setNegativeButton("取消", null).show();
     }
 
     private void nights() {
         LocalDate[] dates = new LocalDate[span]; double[] values = store.restHistory(span, dates); String[] labels = new String[span];
         long sum = 0; int n = 0;
         for (int i = 0; i < span; i++) { labels[i] = dayLabel(dates[i], i, span); if (!Double.isNaN(values[i])) { sum += (long) values[i]; n++; } }
-        card();
-        section.addView(BlueUi.label(this, "夜里放下手机", 17, BlueUi.INK, true)); BlueUi.gap(section, 8);
+        card("夜里放下手机");
         Policy.Schedule s = store.schedule();
         section.addView(BlueUi.label(this, n == 0 ? "过完一个完整的夜晚后，这里会显示 " + s.text() + " 之间放下手机的时长。" : "平均每晚放下手机 " + Policy.duration(sum / n) + "，限制时段共 " + Policy.duration(s.minutes() * 60000L), 12, BlueUi.MUTED, false));
         BlueUi.gap(section, 16);

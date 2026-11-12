@@ -1,10 +1,12 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
 <queries><intent><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent><intent><action android:name="android.intent.action.VIEW"/><category android:name="android.intent.category.BROWSABLE"/><data android:scheme="https"/></intent><intent><action android:name="android.intent.action.VIEW"/><category android:name="android.intent.category.BROWSABLE"/><data android:scheme="http"/></intent><intent><action android:name="android.intent.action.WEB_SEARCH"/></intent><intent><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.APP_BROWSER"/></intent><intent><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.HOME"/></intent></queries>
-<application android:icon="@drawable/ic_launcher" android:label="息屏" android:theme="@style/AppTheme" android:allowBackup="false" android:supportsRtl="true">
+<application android:icon="@drawable/ic_launcher" android:label="Peace" android:theme="@style/AppTheme" android:allowBackup="false" android:supportsRtl="true">
 <activity android:name=".HistoryActivity" android:exported="false"/>
+<activity android:name=".LimitPickerActivity" android:exported="false" android:windowSoftInputMode="adjustResize"/>
+<activity android:name=".UnlockActivity" android:exported="false" android:launchMode="singleTop" android:windowSoftInputMode="adjustResize"/>
 <activity android:name=".AppPickerActivity" android:exported="false" android:windowSoftInputMode="adjustResize"/>
 <activity android:name=".MainActivity" android:exported="true" android:launchMode="singleTop"><intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter></activity>
-<service android:name=".GuardService" android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE" android:exported="true" android:label="息屏"><intent-filter><action android:name="android.accessibilityservice.AccessibilityService"/></intent-filter><meta-data android:name="android.accessibilityservice" android:resource="@xml/guard_service"/></service>
+<service android:name=".GuardService" android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE" android:exported="true" android:label="Peace"><intent-filter><action android:name="android.accessibilityservice.AccessibilityService"/></intent-filter><meta-data android:name="android.accessibilityservice" android:resource="@xml/guard_service"/></service>
 <receiver android:name=".TodayWidget" android:exported="false" android:label="今日用机"><intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE"/></intent-filter><meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_today"/></receiver>
 </application></manifest>

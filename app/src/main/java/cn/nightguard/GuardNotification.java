@@ -14,7 +14,7 @@ import java.util.List;
  */
 final class GuardNotification {
     private static final String CHANNEL = "guard_countdown", TIPS = "guard_tips", MORNING = "guard_morning";
-    private static final int ID = 101, WIND_DOWN_ID = 102, MORNING_ID = 103, GOAL_ID = 104, LONG_ID = 105, WEEK_ID = 106;
+    private static final int ID = 101, WIND_DOWN_ID = 102, MORNING_ID = 103, GOAL_ID = 104, LONG_ID = 105, WEEK_ID = 106, LIMIT_ID = 107;
     static final long LONG_SESSION_MS = 30 * 60 * 1000L;
     private final Context context;
     private long lastBoundary = -1, lastPost = -60000;
@@ -34,7 +34,7 @@ final class GuardNotification {
         NotificationChannel countdown = new NotificationChannel(CHANNEL, "夜间倒计时", NotificationManager.IMPORTANCE_LOW);
         countdown.setDescription("限制时段内显示距离解除的倒计时"); countdown.setSound(null, null); countdown.enableVibration(false);
         NotificationChannel tips = new NotificationChannel(TIPS, "温和提醒", NotificationManager.IMPORTANCE_DEFAULT);
-        tips.setDescription("睡前15分钟、每日目标用到八成和用满时、连续看屏幕30分钟时各提醒一次"); tips.enableVibration(false);
+        tips.setDescription("睡前15分钟、应用锁还剩5分钟、每日目标用到八成和用满时、连续看屏幕30分钟时各提醒一次"); tips.enableVibration(false);
         NotificationChannel morning = new NotificationChannel(MORNING, "小结与周报", NotificationManager.IMPORTANCE_LOW);
         morning.setDescription("早上第一次用手机时的昨晚小结，以及每周一的用机周报"); morning.setSound(null, null);
         m.createNotificationChannels(List.of(countdown, tips, morning));
@@ -96,10 +96,17 @@ final class GuardNotification {
             post(GOAL_ID, TIPS, "今天已用 " + Policy.duration(used), "离 " + Policy.duration(goalMs) + " 的目标还剩 " + Policy.duration(goalMs - used) + "。", Notification.CATEGORY_REMINDER);
     }
 
+    /** An app lock is about to close: once per app and day. */
+    void limitSoon(Store store, String pkg, String name, long leftMs) {
+        if (!permitted(context) || !store.once("tip:limit:" + pkg + ":" + java.time.LocalDate.now())) return;
+        long minutes = Math.max(1, (leftMs + 59999) / 60000);
+        post(LIMIT_ID, TIPS, "「" + name + "」今天还剩 " + minutes + " 分钟", "时间到就会锁定，明天 00:00 自动解锁。先把手头的看完、收个尾吧。", Notification.CATEGORY_REMINDER);
+    }
+
     private void countdown(Policy.Schedule s, ZonedDateTime now) {
         long boundary = Policy.nightEnd(now, s).toInstant().toEpochMilli(), elapsed = android.os.SystemClock.elapsedRealtime();
         if (boundary == lastBoundary && elapsed - lastPost < 60000) return;
-        Notification n = new Notification.Builder(context, CHANNEL).setSmallIcon(R.drawable.ic_guard).setColor(0xff396fa8)
+        Notification n = new Notification.Builder(context, CHANNEL).setSmallIcon(R.drawable.ic_guard).setColor(0xff4f5fd8)
                 .setContentTitle("夜间守护中 · 距离解除").setContentText(s.endText() + " 自动解除 · 已选应用暂停使用")
                 .setWhen(boundary).setShowWhen(true).setUsesChronometer(true).setChronometerCountDown(true)
                 .setOngoing(true).setOnlyAlertOnce(true).setCategory(Notification.CATEGORY_STATUS)
@@ -132,7 +139,7 @@ final class GuardNotification {
     }
 
     private void post(int id, String channel, String title, String text, String category) {
-        Notification n = new Notification.Builder(context, channel).setSmallIcon(R.drawable.ic_guard).setColor(0xff396fa8)
+        Notification n = new Notification.Builder(context, channel).setSmallIcon(R.drawable.ic_guard).setColor(0xff4f5fd8)
                 .setContentTitle(title).setContentText(text).setStyle(new Notification.BigTextStyle().bigText(text))
                 .setAutoCancel(true).setCategory(category).setContentIntent(open()).build();
         try { channels().notify(id, n); } catch (SecurityException ignored) { }

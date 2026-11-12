@@ -41,9 +41,9 @@ public class AppPickerActivity extends Activity {
         LinearLayout page=BlueUi.column(this);page.setFocusableInTouchMode(true);BlueUi.page(this,page);
         LinearLayout header=BlueUi.row(this);header.setPadding(dp(10),dp(12),dp(20),dp(8));
         header.addView(BlueUi.iconButton(this,"back","返回",this::leave));
-        LinearLayout titles=BlueUi.column(this);titles.addView(BlueUi.label(this,"限制应用",23,BlueUi.INK,true));BlueUi.gap(titles,5);
-        titles.addView(BlueUi.label(this,"勾选后在夜间暂停使用",12,BlueUi.MUTED,false));header.addView(titles,new LinearLayout.LayoutParams(0,-2,1));page.addView(header);
-        LinearLayout searchBox=BlueUi.row(this);searchBox.setPadding(dp(14),0,dp(8),0);searchBox.setBackground(BlueUi.background(this,BlueUi.CARD,BlueUi.LINE,12));
+        LinearLayout titles=BlueUi.column(this);titles.addView(BlueUi.label(this,"夜间限制清单",22,BlueUi.INK,true));BlueUi.gap(titles,5);
+        titles.addView(BlueUi.label(this,"勾选的应用在夜间和专注时暂停",12,BlueUi.MUTED,false));header.addView(titles,new LinearLayout.LayoutParams(0,-2,1));page.addView(header);
+        LinearLayout searchBox=BlueUi.row(this);searchBox.setPadding(dp(14),0,dp(8),0);searchBox.setBackground(BlueUi.background(this,BlueUi.CARD,0,14));
         searchBox.addView(new BlueUi.Glyph(this,"search",BlueUi.MUTED),new LinearLayout.LayoutParams(dp(19),dp(19)));
         search=new EditText(this);search.setSingleLine();search.setTextSize(15);search.setTextColor(BlueUi.INK);search.setHintTextColor(BlueUi.MUTED);
         search.setHint("搜索应用名称");search.setContentDescription("搜索应用");search.setBackgroundColor(Color.TRANSPARENT);search.setPadding(dp(10),dp(12),0,dp(12));
@@ -80,7 +80,7 @@ public class AppPickerActivity extends Activity {
             boolean on=group.equals(filter);
             TextView chip=BlueUi.label(this,group+" "+count,13,on?BlueUi.ON_BLUE:BlueUi.MUTED,on);
             chip.setGravity(Gravity.CENTER);chip.setMinHeight(dp(38));chip.setPadding(dp(14),dp(8),dp(14),dp(8));
-            chip.setBackground(BlueUi.ripple(this,on?BlueUi.BLUE:BlueUi.CARD,10));
+            chip.setBackground(BlueUi.ripple(this,on?BlueUi.BLUE:BlueUi.CARD,19));
             LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-2,-2);lp.rightMargin=dp(8);chips.addView(chip,lp);
             chip.setOnClickListener(v->{filter=group;rebuildChips();refresh();list.setSelection(0);});
         }
@@ -131,7 +131,7 @@ public class AppPickerActivity extends Activity {
             AppCatalog.Entry e=filtered.get(position);boolean checked=selection.checked(e.pkg);
             Drawable icon=e.icon!=null?e.icon:icons.get(e.pkg);if(icon==null){icon=AppCatalog.icon(AppPickerActivity.this,e.pkg);icons.put(e.pkg,icon);}h.icon.setImageDrawable(icon);
             h.name.setText(e.label);h.meta.setText(e.isBrowser()?(e.browser?"浏览器 · 自动识别，可取消":"浏览器 · 你的标记"):e.category);h.check.setChecked(checked);
-            h.row.setBackground(BlueUi.ripple(AppPickerActivity.this,checked?BlueUi.SELECTED:BlueUi.CARD,14));
+            h.row.setBackground(BlueUi.ripple(AppPickerActivity.this,checked?BlueUi.SELECTED:BlueUi.CARD,16));
             h.row.setContentDescription(e.label+"，"+h.meta.getText()+"，"+(checked?"已选":"未选"));
             h.row.setAccessibilityDelegate(new View.AccessibilityDelegate(){@Override public void onInitializeAccessibilityNodeInfo(View v,android.view.accessibility.AccessibilityNodeInfo node){super.onInitializeAccessibilityNodeInfo(v,node);node.setCheckable(true);node.setChecked(checked);}});
             h.row.setOnClickListener(v->{selection.set(e.pkg,!selection.checked(e.pkg));refresh();});

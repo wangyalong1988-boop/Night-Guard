@@ -134,7 +134,7 @@ public class GuardService extends AccessibilityService {
         if (target == null) hide();
         else if (cover == null || !target.equals(coverPkg) || !why.equals(coverReason)) { hide(); show(target, why, schedule, windows > 1); }
         else { cover.tick(now); muteMedia(); } // if the app starts playing again behind the cover
-        if (notification != null) notification.refresh(store, schedule, now);
+        if (notification != null) { notification.refresh(store, schedule, now); warnLimit(); }
         if (SystemClock.elapsedRealtime() - widgetAt >= WIDGET_MS) { widgetAt = SystemClock.elapsedRealtime(); TodayWidget.update(this, store); }
         handler.postDelayed(tick, nextDelay(night, now, schedule));
     }
@@ -146,9 +146,26 @@ public class GuardService extends AccessibilityService {
         long focus = store.focusRemainingMs(); if (focus > 0) delay = Math.min(delay, Math.max(300, focus + 300));
         if (appPkg != null) { // wake up right when the app in front reaches its limit
             Integer limit = store.limits().get(appPkg);
-            if (limit != null) { Long used = store.appTimes(java.time.LocalDate.now()).get(appPkg); long left = limit * 60000L - (used == null ? 0 : used); if (left > 0) delay = Math.min(delay, left + 500); }
+            if (limit != null) {
+                long left = limit * 60000L - usedNow(appPkg);
+                if (left > Policy.LIMIT_WARN_MS) delay = Math.min(delay, left - Policy.LIMIT_WARN_MS + 500); // the five-minute warning
+                else if (left > 0) delay = Math.min(delay, left + 500);
+            }
         }
         return delay;
+    }
+
+    /** Today's recorded time for an app; {@link #check} credits the current stretch first, so this is up to date. */
+    private long usedNow(String pkg) {
+        Long used = store.appTimes(java.time.LocalDate.now()).get(pkg);
+        return used == null ? 0 : used;
+    }
+
+    /** Once per app and day, a heads-up when its lock is five minutes away. */
+    private void warnLimit() {
+        if (appPkg == null || appPkg.equals(coverPkg)) return;
+        Integer limit = store.limits().get(appPkg); long used = usedNow(appPkg);
+        if (Policy.limitWarning(used, limit)) notification.limitSoon(store, appPkg, Apps.label(this, appPkg), limit * 60000L - used);
     }
 
     private void show(String pkg, String why, Policy.Schedule schedule, boolean split) {
@@ -163,7 +180,7 @@ public class GuardService extends AccessibilityService {
                 mode == NightCover.Mode.NIGHT ? schedule.endText() : null, limit == null ? 0 : limit, store.blocksToday(mode == NightCover.Mode.NIGHT),
                 store.waitForNextRequest() / 60000, split,
                 this::goHome,
-                () -> { goHome(); handler.postDelayed(() -> startActivity(new Intent(this, MainActivity.class).putExtra("target", pkg)
+                () -> { goHome(); handler.postDelayed(() -> startActivity(new Intent(this, UnlockActivity.class).putExtra("target", pkg)
                         .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP)), 350); });
         WindowManager.LayoutParams lp = new WindowManager.LayoutParams(-1, -1, WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
                 WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN | WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS, PixelFormat.OPAQUE);

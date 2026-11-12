@@ -4,6 +4,7 @@ import android.app.Activity;
 import android.graphics.*;
 import android.graphics.drawable.Drawable;
 import android.content.Context;
+import android.content.Intent;
 import android.view.*;
 import android.widget.*;
 import androidx.test.core.app.ActivityScenario;
@@ -20,9 +21,31 @@ public class InterfaceTest {
     @Test public void homeIsRenderedAndCaptured() throws Exception {
         try(ActivityScenario<MainActivity> scenario=ActivityScenario.launch(MainActivity.class)){
             InstrumentationRegistry.getInstrumentation().waitForIdleSync();
-            settle();scenario.onActivity(a->{assertNotNull(findText(a.getWindow().getDecorView(),"限制清单"));assertNotNull(findText(a.getWindow().getDecorView(),"守护状态"));});
+            settle();scenario.onActivity(a->{assertNotNull(findText(a.getWindow().getDecorView(),"Peace"));assertNotNull(findText(a.getWindow().getDecorView(),"专注一下"));});
             capture("home.png");
+            scenario.onActivity(a->findDescription(a.getWindow().getDecorView(),"应用锁").performClick());
+            settle();scenario.onActivity(a->assertNotNull(findText(a.getWindow().getDecorView(),"每个应用每天能用多久，用满就锁到明天")));
+            capture("locks-empty.png");
+            scenario.onActivity(a->findDescription(a.getWindow().getDecorView(),"夜间").performClick());
+            settle();scenario.onActivity(a->{assertNotNull(findText(a.getWindow().getDecorView(),"限制清单"));assertNotNull(findText(a.getWindow().getDecorView(),"每日限制时段"));});
+            capture("night.png");
+            scenario.onActivity(a->findDescription(a.getWindow().getDecorView(),"设置").performClick());
+            settle();scenario.onActivity(a->assertNotNull(findText(a.getWindow().getDecorView(),"守护状态")));
+            capture("settings.png");
         }
+    }
+    @Test public void appLocksShowUsageAndLockedState() throws Exception {
+        Context c=InstrumentationRegistry.getInstrumentation().getTargetContext();Store store=new Store(c);java.time.LocalDate today=java.time.LocalDate.now();
+        // Real system packages so the screenshot shows real names and icons; a missing one falls back to its package name.
+        store.p.edit().putString("limits","com.android.camera2=30;com.android.contacts=60;com.android.settings=120")
+            .putString("a:"+today,"com.android.camera2=1800000;com.android.contacts=3360000;com.android.settings=1500000").commit();
+        Intent intent=new Intent(c,MainActivity.class).putExtra("tab",MainActivity.TAB_LOCKS);
+        try(ActivityScenario<MainActivity> scenario=ActivityScenario.launch(intent)){
+            settle();scenario.onActivity(a->{assertNotNull(findText(a.getWindow().getDecorView(),"已锁定"));assertNotNull(findText(a.getWindow().getDecorView(),"添加应用锁"));});
+            capture("locks.png");
+            scenario.onActivity(a->Locks.edit(a,new Store(a),"com.android.contacts",()->{}));
+            settle();capture("lock-sheet.png");
+        } finally { store.p.edit().remove("limits").remove("limitsPending").remove("limitsPendingDay").remove("a:"+today).commit(); }
     }
     @Test public void pickerSearchSelectionAndBrowserProtection() throws Exception {
         try(ActivityScenario<AppPickerActivity> scenario=ActivityScenario.launch(AppPickerActivity.class)){
@@ -30,7 +53,7 @@ public class InterfaceTest {
             while(!ready[0]&&android.os.SystemClock.elapsedRealtime()<deadline){scenario.onActivity(a->ready[0]=a.selection!=null);if(!ready[0])Thread.sleep(100);}
             assertTrue("Installed application list loads",ready[0]);
             scenario.onActivity(a->{new Store(a).p.edit().remove("apps").remove("pending").apply();a.showEntries(fixtures());});
-            scenario.onActivity(a->{View title=findText(a.getWindow().getDecorView(),"限制应用");android.graphics.Rect bounds=new android.graphics.Rect();assertNotNull(title);assertTrue("Picker title is visible",title.getGlobalVisibleRect(bounds)&&bounds.width()>0);});
+            scenario.onActivity(a->{View title=findText(a.getWindow().getDecorView(),"夜间限制清单");android.graphics.Rect bounds=new android.graphics.Rect();assertNotNull(title);assertTrue("Picker title is visible",title.getGlobalVisibleRect(bounds)&&bounds.width()>0);});
             capture("apps-all.png");
             scenario.onActivity(a->{ListView list=findList(a.getWindow().getDecorView());list.setSelection(list.getCount()-1);});settle();
             scenario.onActivity(a->{View browser=findDescriptionPrefix(a.getWindow().getDecorView(),"浏览器，");assertNotNull("Browser row is shown",browser);
@@ -66,7 +89,7 @@ public class InterfaceTest {
                 assertNotNull(findText(cover.root,"云端视频 已经睡了"));assertNotNull(findText(cover.root,"今晚已帮你挡下 3 次"));});
             capture("cover.png");
             scenario.onActivity(a->{Drawable icon=fixtures().get(1).icon;NightCover cover=NightCover.build(a,NightCover.Mode.LIMIT,icon,"轻音音乐",inFiveHours,null,30,1,10,false,()->{},()->{});a.setContentView(cover.root);
-                assertNotNull(findText(cover.root,"今天的 轻音音乐 用完了"));assertNotNull(findText(cover.root,"再用 5 分钟"));});
+                assertNotNull(findText(cover.root,"今天的「轻音音乐」到点了"));assertNotNull(findText(cover.root,"明天 00:00 自动解锁"));assertNotNull(findText(cover.root,"再用 5 分钟"));});
             capture("cover-limit.png");
         }
     }
@@ -94,7 +117,7 @@ public class InterfaceTest {
     @Test public void homeFollowsDarkMode() throws Exception {
         shell("cmd uimode night yes");
         try(ActivityScenario<MainActivity> scenario=ActivityScenario.launch(MainActivity.class)){
-            settle();scenario.onActivity(a->{assertTrue("Dark palette is used",BlueUi.dark);assertNotNull(findText(a.getWindow().getDecorView(),"限制清单"));});
+            settle();scenario.onActivity(a->{assertTrue("Dark palette is used",BlueUi.dark);assertNotNull(findText(a.getWindow().getDecorView(),"概览"));});
             capture("home-dark.png");
         } finally { shell("cmd uimode night no"); }
     }

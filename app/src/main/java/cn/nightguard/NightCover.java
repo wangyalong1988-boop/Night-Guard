@@ -29,6 +29,15 @@ final class NightCover {
         "你选择了专注，这个决定很棒。",
     };
 
+    /** Shown when an app lock closes. The tone is a kept promise, not a punishment. */
+    static final String[] LIMIT_WHISPERS = {
+        "停在这里刚刚好，剩下的时间留给自己。",
+        "放下它，世界不会错过你。",
+        "说到做到的感觉，比再刷一条更好。",
+        "抬头看看身边，去喝杯水、走两步。",
+        "它明天还在，今天的你可以去做点别的。",
+    };
+
     final View root; final TextView countdown;
     private final long endsAt;
 
@@ -56,23 +65,24 @@ final class NightCover {
             int pd = BlueUi.dp(c, 14); sleeping.setPadding(pd, pd, pd, pd); sleeping.setBackground(BlueUi.background(c, 0x22ffffff, 0x33ffffff, 26));
             page.addView(sleeping, new LinearLayout.LayoutParams(BlueUi.dp(c, 80), BlueUi.dp(c, 80))); BlueUi.gap(page, 22);
 
-            String titleText = mode == Mode.NIGHT ? appName + " 已经睡了" : mode == Mode.FOCUS ? "专注中，" + appName + " 先等等" : "今天的 " + appName + " 用完了";
+            if (mode == Mode.LIMIT) { page.addView(BlueUi.pill(c, "应用锁 · 已锁定", BlueUi.INK, 0x1fffffff)); BlueUi.gap(page, 16); }
+            String titleText = mode == Mode.NIGHT ? appName + " 已经睡了" : mode == Mode.FOCUS ? "专注中，" + appName + " 先等等" : "今天的「" + appName + "」到点了";
             String whisperText = mode == Mode.NIGHT ? WHISPERS[Math.floorMod(blocks - 1, WHISPERS.length)]
                     : mode == Mode.FOCUS ? FOCUS_WHISPERS[Math.floorMod(blocks - 1, FOCUS_WHISPERS.length)]
-                    : "说好每天 " + Policy.duration(limitMinutes * 60000L) + "，已经到了。明天再见。";
+                    : "说好每天 " + Policy.duration(limitMinutes * 60000L) + "，今天的份已经用完。\n" + LIMIT_WHISPERS[Math.floorMod(blocks - 1, LIMIT_WHISPERS.length)];
             TextView title = BlueUi.label(c, titleText, 24, BlueUi.INK, true); title.setGravity(Gravity.CENTER); page.addView(title); BlueUi.gap(page, 12);
             TextView whisper = BlueUi.label(c, whisperText, 15, BlueUi.MUTED, false); whisper.setGravity(Gravity.CENTER); page.addView(whisper);
             BlueUi.gap(page, 40);
 
             TextView countdown = BlueUi.label(c, "", 40, BlueUi.INK, false); countdown.setTypeface(Typeface.create("sans-serif-light", Typeface.NORMAL));
             countdown.setLetterSpacing(0.04f); countdown.setFontFeatureSettings("tnum"); countdown.setGravity(Gravity.CENTER); page.addView(countdown); BlueUi.gap(page, 8);
-            String captionText = mode == Mode.NIGHT ? "距离 " + endText + " 自动解除" : mode == Mode.FOCUS ? "专注结束后自动解除" : "明天 00:00 重新计时";
+            String captionText = mode == Mode.NIGHT ? "距离 " + endText + " 自动解除" : mode == Mode.FOCUS ? "专注结束后自动解除" : "明天 00:00 自动解锁";
             TextView caption = BlueUi.label(c, captionText, 13, BlueUi.MUTED, false); caption.setGravity(Gravity.CENTER); page.addView(caption); BlueUi.gap(page, 22);
 
             if (blocks > 0) { page.addView(BlueUi.pill(c, (mode == Mode.NIGHT ? "今晚" : "今天") + "已帮你挡下 " + blocks + " 次", BlueUi.STAR, 0x26f2d58a)); BlueUi.gap(page, 34); }
 
             LinearLayout actions = BlueUi.column(c); page.addView(actions, new LinearLayout.LayoutParams(-1, -2));
-            actions.addView(BlueUi.button(c, "回到桌面", true, home), new LinearLayout.LayoutParams(-1, -2)); BlueUi.gap(actions, 12);
+            actions.addView(BlueUi.button(c, mode == Mode.LIMIT ? "好，明天再见" : "回到桌面", true, home), new LinearLayout.LayoutParams(-1, -2)); BlueUi.gap(actions, 12);
             Button need = BlueUi.button(c, mode == Mode.LIMIT ? "再用 5 分钟" : "确实需要用一下", false, unlock); need.setBackground(BlueUi.ripple(c, 0x14ffffff, 12)); need.setTextColor(BlueUi.MUTED);
             actions.addView(need, new LinearLayout.LayoutParams(-1, -2)); BlueUi.gap(actions, 14);
             TextView rule = BlueUi.label(c, "需写明原因并冷静 " + waitMinutes + " 分钟，之后只开放这个应用 5 分钟", 12, BlueUi.MUTED, false);

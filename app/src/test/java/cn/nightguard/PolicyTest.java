@@ -144,6 +144,21 @@ public class PolicyTest {
         assertFalse(Policy.limitReached(999999999L, null)); assertFalse(Policy.limitReached(999999999L, 0));
     }
 
+    @Test public void appLockWarnsInTheLastFiveMinutesOnly() {
+        assertFalse(Policy.limitWarning(24 * 60000L, 30));      // 6 minutes left
+        assertTrue(Policy.limitWarning(25 * 60000L, 30));       // exactly 5 left
+        assertTrue(Policy.limitWarning(30 * 60000L - 1, 30));
+        assertFalse(Policy.limitWarning(30 * 60000L, 30));      // already locked
+        assertFalse(Policy.limitWarning(0, null)); assertFalse(Policy.limitWarning(0, 0));
+    }
+
+    @Test public void appLockTimeIsWholeFiveMinutesInRange() {
+        assertEquals(90, Policy.limitMinutes(1, 30)); assertEquals(5, Policy.limitMinutes(0, 0));
+        assertEquals(Policy.LIMIT_MAX, Policy.limitMinutes(12, 0)); assertEquals(25, Policy.limitMinutes(0, 23));
+        assertEquals(0.5, Policy.limitFraction(15 * 60000L, 30), 1e-9); assertEquals(1.0, Policy.limitFraction(99 * 60000L, 30), 1e-9);
+        assertEquals(0.0, Policy.limitFraction(5000, 0), 1e-9);
+    }
+
     @Test public void phrasesAreStableForTheSameNumber() {
         assertEquals(Policy.phrase(123456), Policy.phrase(123456)); assertTrue(Policy.phrase(7).endsWith(" 0007"));
     }

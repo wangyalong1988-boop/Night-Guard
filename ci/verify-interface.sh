@@ -4,13 +4,13 @@ set +e
 gradle --no-daemon :app:connectedDebugAndroidTest
 verification_status=$?
 mkdir -p screenshots
-for image in home home-dark cover cover-limit history history-apps apps-all apps-search apps-media apps-keyboard; do
+for image in home home-dark locks-empty locks lock-sheet night settings cover cover-limit history history-apps apps-all apps-search apps-media apps-keyboard; do
   adb exec-out cat "/data/local/tmp/nightguard-$image.png" > "screenshots/$image.png"
   if [ $? -ne 0 ]; then rm -f "screenshots/$image.png"; fi
 done
 python - <<'PYVERIFY'
 from pathlib import Path
-for name in ("home", "home-dark", "cover", "cover-limit", "history", "history-apps", "apps-all", "apps-search", "apps-media", "apps-keyboard"):
+for name in ("home", "home-dark", "locks-empty", "locks", "lock-sheet", "night", "settings", "cover", "cover-limit", "history", "history-apps", "apps-all", "apps-search", "apps-media", "apps-keyboard"):
     path = Path("screenshots") / (name + ".png")
     assert path.is_file() and path.read_bytes()[:8] == b"\x89PNG\r\n\x1a\n", "Missing or invalid screenshot: " + name
 PYVERIFY
