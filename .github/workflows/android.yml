@@ -63,14 +63,7 @@ jobs:
           disable-animations: true
           script: |
             adb shell settings put system system_locales zh-CN
-            gradle --no-daemon :app:connectedDebugAndroidTest
-      - name: Collect actual emulator screenshots
-        if: always()
-        run: |
-          mkdir -p screenshots
-          for image in home apps-all apps-search apps-media; do
-            adb exec-out run-as cn.nightguard cat files/$image.png > screenshots/$image.png || rm -f screenshots/$image.png
-          done
+            bash ci/verify-interface.sh
       - uses: actions/upload-artifact@v4
         if: always()
         with:
