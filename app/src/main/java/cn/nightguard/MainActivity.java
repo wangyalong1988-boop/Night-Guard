@@ -98,7 +98,7 @@ public class MainActivity extends Activity {
             FrameLayout pill = new FrameLayout(this); if (on) pill.setBackground(BlueUi.background(this, BlueUi.PALE, 0, 16));
             pill.addView(new BlueUi.Glyph(this, TAB_ICONS[i], on ? BlueUi.BLUE : BlueUi.MUTED), new FrameLayout.LayoutParams(dp(22), dp(22), Gravity.CENTER));
             item.addView(pill, new LinearLayout.LayoutParams(dp(58), dp(32))); BlueUi.gap(item, 4);
-            item.addView(BlueUi.label(this, TABS[i], 11, on ? BlueUi.BLUE : BlueUi.MUTED, on));
+            item.addView(BlueUi.centered(BlueUi.label(this, TABS[i], 11, on ? BlueUi.BLUE : BlueUi.MUTED, on)));
             item.setContentDescription(TABS[i]); item.setSelected(on); item.setBackground(BlueUi.ripple(this, Color.TRANSPARENT, 16));
             item.setOnClickListener(v -> select(index));
             items.addView(item, new LinearLayout.LayoutParams(0, -2, 1));
@@ -140,9 +140,9 @@ public class MainActivity extends Activity {
             FrameLayout ringBox = new FrameLayout(this); ring = new BlueUi.Ring(this);
             ringBox.addView(ring, new FrameLayout.LayoutParams(-1, -1));
             LinearLayout center = BlueUi.column(this); center.setGravity(Gravity.CENTER);
-            center.addView(BlueUi.label(this, "已用", BlueUi.CAPTION, BlueUi.MUTED, false)); BlueUi.gap(center, 6);
-            todayUsed = BlueUi.number(this, "", 26, BlueUi.INK); center.addView(todayUsed); BlueUi.gap(center, 6);
-            todayGoal = BlueUi.label(this, "", BlueUi.CAPTION, BlueUi.MUTED, false); center.addView(todayGoal);
+            center.addView(BlueUi.centered(BlueUi.label(this, "已用", BlueUi.CAPTION, BlueUi.MUTED, false))); BlueUi.gap(center, 6);
+            todayUsed = BlueUi.centered(BlueUi.number(this, "", 26, BlueUi.INK)); center.addView(todayUsed); BlueUi.gap(center, 6);
+            todayGoal = BlueUi.centered(BlueUi.label(this, "", BlueUi.CAPTION, BlueUi.MUTED, false)); center.addView(todayGoal);
             ringBox.addView(center, new FrameLayout.LayoutParams(-1, -1, Gravity.CENTER));
             LinearLayout.LayoutParams rl = new LinearLayout.LayoutParams(dp(176), dp(176)); rl.gravity = Gravity.CENTER_HORIZONTAL; rl.topMargin = dp(4);
             hero.addView(ringBox, rl); BlueUi.gap(hero, 16);
@@ -155,7 +155,7 @@ public class MainActivity extends Activity {
             Store.Day t = store.today();
             BlueUi.tiles(root,
                     BlueUi.statTile(this, "拿起", t.pickups + " 次", "解锁屏幕算一次"),
-                    BlueUi.statTile(this, clockNight ? "今晚拦下" : "今天拦下", store.blocksToday(clockNight) + " 次", "被 Peace 挡下的打开"),
+                    BlueUi.statTile(this, clockNight ? "今晚拦下" : "今天拦下", store.blocksToday(clockNight) + " 次", "帮你挡下的打开"),
                     BlueUi.statTile(this, "专注", store.focusMinutesToday() + " 分", "今天累计"));
         }
 
@@ -367,7 +367,7 @@ public class MainActivity extends Activity {
             LinearLayout col = BlueUi.column(this); col.setGravity(Gravity.CENTER_HORIZONTAL);
             String kind = !n.recorded || !n.guarded ? "dot" : n.unlocks == 0 ? "star-fill" : "star-half";
             col.addView(new BlueUi.Glyph(this, kind, kind.equals("dot") ? BlueUi.SUBTLE : BlueUi.STAR), new LinearLayout.LayoutParams(dp(26), dp(26))); BlueUi.gap(col, 6);
-            col.addView(BlueUi.label(this, WEEK[n.date.getDayOfWeek().getValue() - 1], 11, BlueUi.MUTED, false));
+            col.addView(BlueUi.centered(BlueUi.label(this, WEEK[n.date.getDayOfWeek().getValue() - 1], 11, BlueUi.MUTED, false)));
             col.setContentDescription(n.date.getMonthValue() + "月" + n.date.getDayOfMonth() + "日，" + (!n.recorded || !n.guarded ? "未守护" : n.unlocks == 0 ? "安稳，拦下" + n.blocks + "次" : "解锁" + n.unlocks + "次"));
             row.addView(col, new LinearLayout.LayoutParams(0, -2, 1));
         }

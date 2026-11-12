@@ -65,7 +65,7 @@ final class NightCover {
             int pd = BlueUi.dp(c, 14); sleeping.setPadding(pd, pd, pd, pd); sleeping.setBackground(BlueUi.background(c, 0x22ffffff, 0x33ffffff, 26));
             page.addView(sleeping, new LinearLayout.LayoutParams(BlueUi.dp(c, 80), BlueUi.dp(c, 80))); BlueUi.gap(page, 22);
 
-            if (mode == Mode.LIMIT) { page.addView(BlueUi.pill(c, "应用锁 · 已锁定", BlueUi.INK, 0x1fffffff)); BlueUi.gap(page, 16); }
+            if (mode == Mode.LIMIT) { page.addView(BlueUi.pill(c, "应用锁 · 已锁定", BlueUi.INK, 0x1fffffff), new LinearLayout.LayoutParams(-2, -2)); BlueUi.gap(page, 16); }
             String titleText = mode == Mode.NIGHT ? appName + " 已经睡了" : mode == Mode.FOCUS ? "专注中，" + appName + " 先等等" : "今天的「" + appName + "」到点了";
             String whisperText = mode == Mode.NIGHT ? WHISPERS[Math.floorMod(blocks - 1, WHISPERS.length)]
                     : mode == Mode.FOCUS ? FOCUS_WHISPERS[Math.floorMod(blocks - 1, FOCUS_WHISPERS.length)]

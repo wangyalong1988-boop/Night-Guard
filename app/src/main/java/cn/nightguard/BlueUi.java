@@ -69,6 +69,9 @@ final class BlueUi {
         return t;
     }
 
+    /** Text centred in its row. Children of a vertical LinearLayout fill the width by default, so centring the layout alone is not enough. */
+    static TextView centered(TextView t) { t.setGravity(Gravity.CENTER_HORIZONTAL); return t; }
+
     static TextView text(Context c, String value, int size, int color) { return label(c, value, size, color, false); }
 
     /** Numbers that change in place keep their width. */
@@ -225,7 +228,7 @@ final class BlueUi {
         LinearLayout t = column(c); t.setPadding(dp(c, 14), dp(c, 14), dp(c, 10), dp(c, 14)); t.setBackground(background(c, CARD, 0, 16));
         t.addView(label(c, label, CAPTION, MUTED, false)); gap(t, 8);
         t.addView(number(c, value, 21, INK)); gap(t, 6);
-        TextView cap = label(c, caption, 11, MUTED, false); cap.setMaxLines(1); cap.setEllipsize(android.text.TextUtils.TruncateAt.END); t.addView(cap);
+        TextView cap = label(c, caption, 11, MUTED, false); cap.setMaxLines(2); cap.setEllipsize(android.text.TextUtils.TruncateAt.END); t.addView(cap);
         t.setContentDescription(label + " " + value + "，" + caption);
         return t;
     }
