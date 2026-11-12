@@ -65,9 +65,14 @@ public class InterfaceTest {
     private static void settle()throws Exception{InstrumentationRegistry.getInstrumentation().waitForIdleSync();Thread.sleep(250);}
     private static void capture(String name)throws Exception{
         InstrumentationRegistry.getInstrumentation().waitForIdleSync();Thread.sleep(350);
-        Bitmap image=InstrumentationRegistry.getInstrumentation().getUiAutomation().takeScreenshot();assertNotNull(image);
-        File file=new File(InstrumentationRegistry.getInstrumentation().getTargetContext().getFilesDir(),name);
-        try(FileOutputStream out=new FileOutputStream(file)){image.compress(Bitmap.CompressFormat.PNG,100,out);}image.recycle();
+        // Gradle removes the tested APK after the suite; export as shell-owned files first.
+        try(android.os.ParcelFileDescriptor descriptor=InstrumentationRegistry.getInstrumentation().getUiAutomation()
+                .executeShellCommand("screencap -p /data/local/tmp/nightguard-"+name+" && echo captured");
+            InputStream in=new android.os.ParcelFileDescriptor.AutoCloseInputStream(descriptor)){
+            ByteArrayOutputStream output=new ByteArrayOutputStream();byte[] buffer=new byte[1024];int count;
+            while((count=in.read(buffer))!=-1)output.write(buffer,0,count);
+            assertTrue("Screenshot export completes",output.toString().contains("captured"));
+        }
     }
     private static View findText(View view,String text){if(view instanceof TextView&&((TextView)view).getText().toString().equals(text))return view;return children(view,v->findText(v,text));}
     private static View findDescription(View view,String text){if(text.contentEquals(view.getContentDescription()==null?"":view.getContentDescription()))return view;return children(view,v->findDescription(v,text));}
