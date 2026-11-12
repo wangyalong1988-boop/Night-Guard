@@ -39,7 +39,7 @@ final class BlueUi {
             PALE = 0xff232849; CARD = 0xff171a23; HERO = 0xff1c2140; SELECTED = 0xff232849; ON_BLUE = 0xff0c0e14;
             STAR = 0xfff2c26b; DANGER = 0xffff6b6e; GOOD = 0xff4cc38a;
         } else {
-            INK = 0xff161a26; MUTED = 0xff6b7385; SUBTLE = 0xffa0a7b6; BLUE = 0xff4f5fd8; PAGE = 0xfff4f5f9; LINE = 0xffe9ebf1;
+            INK = 0xff161a26; MUTED = 0xff6b7385; SUBTLE = 0xffa0a7b6; BLUE = 0xff4f5fd8; PAGE = 0xfff3f3f9; LINE = 0xffe9ebf1;
             PALE = 0xffeceefd; CARD = Color.WHITE; HERO = 0xffeef0fe; SELECTED = 0xffeef0fd; ON_BLUE = Color.WHITE;
             STAR = 0xffe9a23b; DANGER = 0xffe5484d; GOOD = 0xff2e9e6a;
         }
@@ -92,7 +92,7 @@ final class BlueUi {
 
     static void page(Activity activity, View body) {
         Window w = activity.getWindow();
-        body.setBackgroundColor(PAGE); activity.setContentView(body); // creates the decor view; the insets controller needs it
+        body.setBackground(new Backdrop(dark)); activity.setContentView(body); // creates the decor view; the insets controller needs it
         w.setDecorFitsSystemWindows(false); w.setStatusBarColor(Color.TRANSPARENT); w.setNavigationBarColor(Color.TRANSPARENT);
         w.getDecorView().setBackgroundColor(PAGE);
         WindowInsetsController bars = w.getDecorView().getWindowInsetsController();
@@ -104,6 +104,31 @@ final class BlueUi {
             Insets i = insets.getInsets(WindowInsets.Type.systemBars() | WindowInsets.Type.ime());
             v.setPadding(i.left, i.top, i.right, i.bottom); return WindowInsets.CONSUMED;
         });
+    }
+
+    /**
+     * The page behind the cards: a soft mist-blue at the top fading to a warm off-white, with two
+     * faint glows. It stays put while content scrolls over it, so white cards read as layers.
+     */
+    static final class Backdrop extends Drawable {
+        private final Paint p = new Paint(Paint.ANTI_ALIAS_FLAG); private final boolean night;
+        Backdrop(boolean night) { this.night = night; }
+        @Override public void draw(Canvas c) {
+            Rect b = getBounds(); float w = b.width(), h = b.height(); if (w <= 0 || h <= 0) return;
+            int[] base = night ? new int[]{0xff181d3a, 0xff10131f, 0xff0c0e14} : new int[]{0xffe6eafb, 0xfff1f1f9, 0xfff8f5f0};
+            p.setShader(new LinearGradient(0, b.top, 0, b.bottom, base, new float[]{0f, 0.45f, 1f}, Shader.TileMode.CLAMP));
+            c.drawRect(b, p);
+            float r1 = Math.max(w, h) * 0.55f;
+            p.setShader(new RadialGradient(b.left + w * 0.95f, b.top + h * 0.02f, r1, night ? 0x3a5b6cf0 : 0x40aab4ff, 0x00000000, Shader.TileMode.CLAMP));
+            c.drawRect(b, p);
+            float r2 = Math.max(w, h) * 0.5f;
+            p.setShader(new RadialGradient(b.left - w * 0.1f, b.bottom - h * 0.05f, r2, night ? 0x1f8b6cf0 : 0x38f5d3b0, 0x00000000, Shader.TileMode.CLAMP));
+            c.drawRect(b, p);
+            p.setShader(null);
+        }
+        @Override public void setAlpha(int alpha) { }
+        @Override public void setColorFilter(ColorFilter filter) { }
+        @Override public int getOpacity() { return PixelFormat.OPAQUE; }
     }
 
     // ---- Buttons ------------------------------------------------------------------------------
@@ -244,7 +269,7 @@ final class BlueUi {
 
     /** A segmented control. Calls {@code chosen} with the index tapped. */
     static LinearLayout segmented(Context c, String[] options, int selected, java.util.function.IntConsumer chosen) {
-        LinearLayout bar = row(c); int pad = dp(c, 3); bar.setPadding(pad, pad, pad, pad); bar.setBackground(background(c, dark ? CARD : LINE, 0, 12));
+        LinearLayout bar = row(c); int pad = dp(c, 3); bar.setPadding(pad, pad, pad, pad); bar.setBackground(background(c, dark ? CARD : alpha(Color.WHITE, 0x8c), 0, 12));
         for (int i = 0; i < options.length; i++) {
             boolean on = i == selected; int index = i;
             TextView t = label(c, options[i], FOOTNOTE, on ? INK : MUTED, on); t.setGravity(Gravity.CENTER); t.setMinHeight(dp(c, 34));

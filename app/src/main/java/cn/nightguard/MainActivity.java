@@ -90,7 +90,7 @@ public class MainActivity extends Activity {
 
     /** Bottom navigation: icon with a soft pill behind the selected one, and a label. */
     private LinearLayout navigation() {
-        LinearLayout nav = BlueUi.column(this); nav.setBackgroundColor(BlueUi.CARD); BlueUi.divider(nav);
+        LinearLayout nav = BlueUi.column(this); nav.setBackgroundColor(BlueUi.alpha(BlueUi.CARD, 0xf2)); BlueUi.divider(nav);
         LinearLayout items = BlueUi.row(this); items.setPadding(dp(6), dp(8), dp(6), dp(8)); nav.addView(items);
         for (int i = 0; i < TABS.length; i++) {
             int index = i; boolean on = i == tab;
