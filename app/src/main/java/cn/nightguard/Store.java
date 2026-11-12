@@ -112,7 +112,8 @@ final class Store {
 
     long grantRemainingMs() { return Math.max(0, p.getLong("until", 0) - SystemClock.elapsedRealtime()); }
 
-    long waitForNextRequest() { return Policy.waitMs(unlocksTonight()); }
+    /** Night unlocks count per night; daytime extensions (limits, focus) count per day. */
+    long waitForNextRequest() { return Policy.waitMs(night() ? unlocksTonight() : p.getInt("d:" + LocalDate.now() + ":x", 0)); }
 
     void begin(String pkg, String reason) {
         p.edit().putString("request", pkg).putString("reason", reason.trim()).putLong("start", SystemClock.elapsedRealtime())
@@ -131,9 +132,9 @@ final class Store {
         String line = LocalDateTime.now().format(DateTimeFormatter.ofPattern("M月d日 HH:mm")) + "\t" + pkg + "\t" + p.getString("reason", "").replace('\n', ' ').replace('\t', ' ');
         List<String> history = history(); history.add(0, line);
         while (history.size() > HISTORY_LIMIT) history.remove(history.size() - 1);
-        String key = nightKey();
+        String counter = night() ? "n:" + nightKey() + ":u" : "d:" + LocalDate.now() + ":x";
         p.edit().putString("grant", pkg).putLong("until", SystemClock.elapsedRealtime() + Policy.GRANT_MS)
-                .putString("history", String.join("\n", history)).putInt("n:" + key + ":u", p.getInt("n:" + key + ":u", 0) + 1)
+                .putString("history", String.join("\n", history)).putInt(counter, p.getInt(counter, 0) + 1)
                 .remove("request").remove("start").remove("phrase").remove("wait").commit();
         return true;
     }
@@ -161,7 +162,13 @@ final class Store {
 
     int blocksTonight() { return p.getInt("n:" + nightKey() + ":b", 0); }
 
-    void recordBlock() { String k = nightKey(); p.edit().putInt("n:" + k + ":b", p.getInt("n:" + k + ":b", 0) + 1).putBoolean("n:" + k + ":g", true).apply(); }
+    /** Counts a stop: at night towards tonight's record, by day towards today's. */
+    void recordBlock() {
+        if (night()) { String k = nightKey(); p.edit().putInt("n:" + k + ":b", p.getInt("n:" + k + ":b", 0) + 1).putBoolean("n:" + k + ":g", true).apply(); }
+        else { String k = "d:" + LocalDate.now() + ":b"; p.edit().putInt(k, p.getInt(k, 0) + 1).apply(); }
+    }
+
+    int blocksToday(boolean nightCount) { return nightCount ? blocksTonight() : p.getInt("d:" + LocalDate.now() + ":b", 0); }
 
     /** Marks that the guard was actually running tonight, so an unguarded night never earns a star. */
     void markGuarded() { String k = "n:" + nightKey() + ":g"; if (!p.getBoolean(k, false)) p.edit().putBoolean(k, true).apply(); }
@@ -257,6 +264,80 @@ final class Store {
     }
 
     Day today() { List<Day> d = days(1); return d.get(0); }
+
+    // ---- Per-app time -----------------------------------------------------------------------
+
+    boolean inUse() { return p.contains("useAt"); }
+
+    Map<String, Long> appTimes(LocalDate day) { return Policy.parseTimes(p.getString("a:" + day, "")); }
+
+    /** Adds foreground time for one app, split at midnight. Stored as one "a:<date>" entry per day. */
+    void addAppTime(String pkg, long from, long to) {
+        if (pkg == null || pkg.isEmpty() || to <= from || to - from > 6 * 3600000L) return;
+        SharedPreferences.Editor e = p.edit();
+        for (long[] piece : Policy.splitByDay(from, to, java.time.ZoneId.systemDefault())) {
+            String k = "a:" + LocalDate.ofEpochDay(piece[0]);
+            Map<String, Long> m = Policy.parseTimes(p.getString(k, "")); m.merge(pkg, piece[1], Long::sum);
+            e.putString(k, Policy.formatTimes(m));
+        }
+        e.apply();
+    }
+
+    /** Total foreground time per app over the last {@code days} days including today. */
+    Map<String, Long> appTotals(int days) {
+        Map<String, Long> r = new HashMap<>(); LocalDate today = LocalDate.now();
+        for (int i = 0; i < days; i++) for (Map.Entry<String, Long> e : appTimes(today.minusDays(i)).entrySet()) r.merge(e.getKey(), e.getValue(), Long::sum);
+        return r;
+    }
+
+    // ---- Daily limits per app ---------------------------------------------------------------
+
+    /** Limits in force today, in minutes. A looser change waits until tomorrow. */
+    Map<String, Integer> limits() {
+        if (p.contains("limitsPending") && !LocalDate.now().isBefore(LocalDate.parse(p.getString("limitsPendingDay", "2000-01-01"))))
+            p.edit().putString("limits", p.getString("limitsPending", "")).remove("limitsPending").remove("limitsPendingDay").commit();
+        return Policy.parseLimits(p.getString("limits", ""));
+    }
+
+    Map<String, Integer> desiredLimits() { limits(); return Policy.parseLimits(p.getString(p.contains("limitsPending") ? "limitsPending" : "limits", "")); }
+
+    /** @param minutes 0 removes the limit. @return true when the change applies now. */
+    boolean setLimit(String pkg, int minutes) {
+        Map<String, Integer> next = desiredLimits();
+        if (minutes > 0) next.put(pkg, minutes); else next.remove(pkg);
+        Map<String, Integer> now = Policy.immediateLimits(limits(), next);
+        SharedPreferences.Editor e = p.edit().putString("limits", Policy.formatTimes(now));
+        boolean immediate = now.equals(next);
+        if (immediate) e.remove("limitsPending").remove("limitsPendingDay");
+        else e.putString("limitsPending", Policy.formatTimes(next)).putString("limitsPendingDay", LocalDate.now().plusDays(1).toString());
+        e.commit();
+        return immediate;
+    }
+
+    boolean limitReached(String pkg) { Long used = appTimes(LocalDate.now()).get(pkg); return Policy.limitReached(used == null ? 0 : used, limits().get(pkg)); }
+
+    // ---- Focus ------------------------------------------------------------------------------
+
+    /** Blocks the restricted list for a while, from now. It cannot be ended early. */
+    void startFocus(int minutes) {
+        long until = Math.max(p.getLong("focusUntil", 0), System.currentTimeMillis()) + minutes * 60000L;
+        String k = "d:" + LocalDate.now() + ":f";
+        p.edit().putLong("focusUntil", until).putInt(k, p.getInt(k, 0) + minutes).commit();
+    }
+
+    boolean focusing() { return System.currentTimeMillis() < p.getLong("focusUntil", 0); }
+
+    long focusRemainingMs() { return Math.max(0, p.getLong("focusUntil", 0) - System.currentTimeMillis()); }
+
+    int focusMinutesToday() { return p.getInt("d:" + LocalDate.now() + ":f", 0); }
+
+    /** Why this app is stopped right now, ignoring any temporary unlock: night, focus, limit, or null. */
+    String blockReason(String pkg, Set<String> selected) {
+        if (selected.contains(pkg) && night()) return "night";
+        if (selected.contains(pkg) && focusing()) return "focus";
+        if (limitReached(pkg)) return "limit";
+        return null;
+    }
 
     // ---- Goal -------------------------------------------------------------------------------
 
@@ -355,8 +436,9 @@ final class Store {
     void prune() {
         LocalDate cutoff = LocalDate.now().minusDays(120); SharedPreferences.Editor e = null;
         for (String key : new ArrayList<>(p.getAll().keySet())) {
-            String date = (key.startsWith("n:") || key.startsWith("d:")) && key.length() > 12 ? key.substring(2, 12) : key.startsWith("tip:") && key.length() > 14 ? key.substring(key.length() - 10) : null;
-            if (date != null && parse(date, LocalDate.now()).isBefore(cutoff)) { if (e == null) e = p.edit(); e.remove(key); }
+            boolean app = key.startsWith("a:");
+            String date = (key.startsWith("n:") || key.startsWith("d:") || app) && key.length() >= 12 ? key.substring(2, 12) : key.startsWith("tip:") && key.length() > 14 ? key.substring(key.length() - 10) : null;
+            if (date != null && parse(date, LocalDate.now()).isBefore(app ? LocalDate.now().minusDays(40) : cutoff)) { if (e == null) e = p.edit(); e.remove(key); }
         }
         if (e != null) e.apply();
     }

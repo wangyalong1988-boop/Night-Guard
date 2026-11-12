@@ -16,6 +16,11 @@ public final class Policy {
     public static final long WAIT_STEP_MS = 5 * 60 * 1000L;
     public static final long WAIT_MAX_MS = 30 * 60 * 1000L;
     public static final int WIND_DOWN_MINUTES = 15;
+    /**
+     * CNNIC, 第57次《中国互联网络发展状况统计报告》: by December 2025 internet users spent 32.5 hours a
+     * week online (all ages, all devices), about 279 minutes a day. No age breakdown is published.
+     */
+    public static final int CNNIC_DAILY_MINUTES = 279;
     public static final Schedule DEFAULT = new Schedule(60, 480);
 
     private Policy() {}
@@ -166,6 +171,50 @@ public final class Policy {
         if (!(before > 0) || Double.isNaN(after)) return null;
         return (int) Math.round((after - before) / before * 100);
     }
+
+    // ---- Per-app time and limits ------------------------------------------------------------
+
+    /** "pkg=123;pkg2=456" to a map; malformed parts are skipped. */
+    public static java.util.Map<String, Long> parseTimes(String raw) {
+        java.util.Map<String, Long> r = new java.util.HashMap<>();
+        if (raw == null) return r;
+        for (String part : raw.split(";")) {
+            int eq = part.lastIndexOf('=');
+            if (eq <= 0) continue;
+            try { r.merge(part.substring(0, eq), Long.parseLong(part.substring(eq + 1)), Long::sum); } catch (NumberFormatException ignored) { }
+        }
+        return r;
+    }
+
+    public static String formatTimes(java.util.Map<String, ? extends Number> map) {
+        StringBuilder b = new StringBuilder();
+        for (java.util.Map.Entry<String, ? extends Number> e : new java.util.TreeMap<>(map).entrySet()) {
+            if (b.length() > 0) b.append(';');
+            b.append(e.getKey()).append('=').append(e.getValue().longValue());
+        }
+        return b.toString();
+    }
+
+    public static java.util.Map<String, Integer> parseLimits(String raw) {
+        java.util.Map<String, Integer> r = new java.util.HashMap<>();
+        for (java.util.Map.Entry<String, Long> e : parseTimes(raw).entrySet()) if (e.getValue() > 0) r.put(e.getKey(), (int) (long) e.getValue());
+        return r;
+    }
+
+    /**
+     * Which limits apply right away when the user changes them: a stricter (lower or new) limit
+     * applies now, while a looser or removed one keeps the old value until tomorrow.
+     */
+    public static java.util.Map<String, Integer> immediateLimits(java.util.Map<String, Integer> old, java.util.Map<String, Integer> next) {
+        java.util.Map<String, Integer> r = new java.util.HashMap<>(old);
+        for (java.util.Map.Entry<String, Integer> e : next.entrySet()) {
+            Integer before = old.get(e.getKey());
+            if (before == null || e.getValue() < before) r.put(e.getKey(), e.getValue());
+        }
+        return r;
+    }
+
+    public static boolean limitReached(long usedMs, Integer limitMinutes) { return limitMinutes != null && limitMinutes > 0 && usedMs >= limitMinutes * 60000L; }
 
     /** "6小时12分", "45分钟", "不到1分钟". */
     public static String duration(long ms) {

@@ -123,6 +123,27 @@ public class PolicyTest {
         assertNull(Policy.change(0, 100)); assertNull(Policy.change(Double.NaN, 100));
     }
 
+    @Test public void appTimesRoundTrip() {
+        java.util.Map<String, Long> m = Policy.parseTimes("com.a=60000;bad;com.b=x;com.a=1000;=5;com.c=0");
+        assertEquals(Long.valueOf(61000), m.get("com.a")); assertNull(m.get("com.b")); assertEquals(2, m.size());
+        assertEquals("com.a=61000;com.c=0", Policy.formatTimes(m));
+        assertEquals(0, Policy.parseTimes(null).size()); assertEquals(0, Policy.parseTimes("").size());
+    }
+
+    @Test public void stricterLimitsApplyNowLooserOnesTomorrow() {
+        java.util.Map<String, Integer> old = java.util.Map.of("video", 30, "game", 60);
+        java.util.Map<String, Integer> next = java.util.Map.of("video", 60, "game", 20, "social", 45);
+        java.util.Map<String, Integer> now = Policy.immediateLimits(old, next);
+        assertEquals(Integer.valueOf(30), now.get("video")); assertEquals(Integer.valueOf(20), now.get("game")); assertEquals(Integer.valueOf(45), now.get("social"));
+        assertEquals(Integer.valueOf(30), Policy.immediateLimits(old, java.util.Map.of("game", 60)).get("video")); // removal waits
+        assertEquals(java.util.Map.of("video", 30), Policy.parseLimits("video=30;none=0"));
+    }
+
+    @Test public void limitIsReachedAtTheMinute() {
+        assertFalse(Policy.limitReached(29 * 60000L, 30)); assertTrue(Policy.limitReached(30 * 60000L, 30));
+        assertFalse(Policy.limitReached(999999999L, null)); assertFalse(Policy.limitReached(999999999L, 0));
+    }
+
     @Test public void phrasesAreStableForTheSameNumber() {
         assertEquals(Policy.phrase(123456), Policy.phrase(123456)); assertTrue(Policy.phrase(7).endsWith(" 0007"));
     }

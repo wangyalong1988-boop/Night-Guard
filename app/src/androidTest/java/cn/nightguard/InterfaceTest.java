@@ -61,23 +61,33 @@ public class InterfaceTest {
     @Test public void nightCoverIsRenderedAndCaptured() throws Exception {
         try(ActivityScenario<MainActivity> scenario=ActivityScenario.launch(MainActivity.class)){
             settle();
-            scenario.onActivity(a->{Drawable icon=fixtures().get(0).icon;NightCover cover=NightCover.build(a,"fixture.video",icon,"云端视频",Policy.DEFAULT,3,15,false,()->{},()->{});a.setContentView(cover.root);
+            long inFiveHours=System.currentTimeMillis()+5*3600000L+754000;
+            scenario.onActivity(a->{Drawable icon=fixtures().get(0).icon;NightCover cover=NightCover.build(a,NightCover.Mode.NIGHT,icon,"云端视频",inFiveHours,"08:00",0,3,15,false,()->{},()->{});a.setContentView(cover.root);
                 assertNotNull(findText(cover.root,"云端视频 已经睡了"));assertNotNull(findText(cover.root,"今晚已帮你挡下 3 次"));});
             capture("cover.png");
+            scenario.onActivity(a->{Drawable icon=fixtures().get(1).icon;NightCover cover=NightCover.build(a,NightCover.Mode.LIMIT,icon,"轻音音乐",inFiveHours,null,30,1,10,false,()->{},()->{});a.setContentView(cover.root);
+                assertNotNull(findText(cover.root,"今天的 轻音音乐 用完了"));assertNotNull(findText(cover.root,"再用 5 分钟"));});
+            capture("cover-limit.png");
         }
     }
     @Test public void historyShowsChartsFromSampleDays() throws Exception {
         Context c=InstrumentationRegistry.getInstrumentation().getTargetContext();Store store=new Store(c);
         android.content.SharedPreferences.Editor e=store.p.edit();java.time.LocalDate today=java.time.LocalDate.now();
         long[] minutes={312,287,301,264,250,233,198,221,205,190,176,182,160,95};
-        for(int i=0;i<minutes.length;i++){java.time.LocalDate d=today.minusDays(minutes.length-1-i);e.putLong("d:"+d+":u",minutes[i]*60000L).putInt("d:"+d+":p",80-i*3).putLong("n:"+d+":rest",(330+i*6)*60000L);}
+        String[] apps={"fixture.short.video","fixture.chat","fixture.game"};
+        for(int i=0;i<minutes.length;i++){java.time.LocalDate d=today.minusDays(minutes.length-1-i);e.putLong("d:"+d+":u",minutes[i]*60000L).putInt("d:"+d+":p",80-i*3).putLong("n:"+d+":rest",(330+i*6)*60000L)
+            .putString("a:"+d,apps[0]+"="+(minutes[i]*30000L)+";"+apps[1]+"="+(minutes[i]*18000L)+";"+apps[2]+"="+(minutes[i]*9000L));}
+        e.putString("limits",apps[0]+"=60");
         e.putLong("screenSince",System.currentTimeMillis()-20L*86400000L).putInt("goalTarget",180).putInt("goalStep",10).putInt("goalBase",240).putString("goalStart",today.minusDays(10).toString()).commit();
         try(ActivityScenario<HistoryActivity> scenario=ActivityScenario.launch(HistoryActivity.class)){
-            settle();scenario.onActivity(a->{assertNotNull(findText(a.getWindow().getDecorView(),"每天亮屏时间"));assertNotNull(findText(a.getWindow().getDecorView(),"夜里放下手机"));});
+            settle();scenario.onActivity(a->{assertNotNull(findText(a.getWindow().getDecorView(),"每天亮屏时间"));assertNotNull(findText(a.getWindow().getDecorView(),"按应用"));assertNotNull(findText(a.getWindow().getDecorView(),"夜里放下手机"));});
             capture("history.png");
+            scenario.onActivity(a->{View content=((ViewGroup)a.findViewById(android.R.id.content)).getChildAt(0);assertTrue(content instanceof ScrollView);
+                View appsCard=findText(content,"按应用");int[] at=new int[2],top=new int[2];appsCard.getLocationInWindow(at);content.getLocationInWindow(top);((ScrollView)content).scrollBy(0,at[1]-top[1]-BlueUi.dp(a,24));});
+            capture("history-apps.png");
         } finally {
             android.content.SharedPreferences.Editor clear=store.p.edit();
-            for(String k:store.p.getAll().keySet())if(k.startsWith("d:")||k.startsWith("n:")||k.startsWith("goal")||k.equals("screenSince"))clear.remove(k);
+            for(String k:store.p.getAll().keySet())if(k.startsWith("d:")||k.startsWith("n:")||k.startsWith("a:")||k.startsWith("goal")||k.startsWith("limits")||k.equals("screenSince"))clear.remove(k);
             clear.commit();
         }
     }

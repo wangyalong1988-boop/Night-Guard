@@ -14,7 +14,7 @@ import java.util.List;
  */
 final class GuardNotification {
     private static final String CHANNEL = "guard_countdown", TIPS = "guard_tips", MORNING = "guard_morning";
-    private static final int ID = 101, WIND_DOWN_ID = 102, MORNING_ID = 103, GOAL_ID = 104, LONG_ID = 105;
+    private static final int ID = 101, WIND_DOWN_ID = 102, MORNING_ID = 103, GOAL_ID = 104, LONG_ID = 105, WEEK_ID = 106;
     static final long LONG_SESSION_MS = 30 * 60 * 1000L;
     private final Context context;
     private long lastBoundary = -1, lastPost = -60000;
@@ -35,8 +35,8 @@ final class GuardNotification {
         countdown.setDescription("限制时段内显示距离解除的倒计时"); countdown.setSound(null, null); countdown.enableVibration(false);
         NotificationChannel tips = new NotificationChannel(TIPS, "温和提醒", NotificationManager.IMPORTANCE_DEFAULT);
         tips.setDescription("睡前15分钟、每日目标用到八成和用满时、连续看屏幕30分钟时各提醒一次"); tips.enableVibration(false);
-        NotificationChannel morning = new NotificationChannel(MORNING, "晨间小结", NotificationManager.IMPORTANCE_LOW);
-        morning.setDescription("早上第一次使用手机时，告诉你昨晚的守护结果"); morning.setSound(null, null);
+        NotificationChannel morning = new NotificationChannel(MORNING, "小结与周报", NotificationManager.IMPORTANCE_LOW);
+        morning.setDescription("早上第一次用手机时的昨晚小结，以及每周一的用机周报"); morning.setSound(null, null);
         m.createNotificationChannels(List.of(countdown, tips, morning));
         return m;
     }
@@ -54,6 +54,29 @@ final class GuardNotification {
         if (minutes > 0 && minutes <= Policy.WIND_DOWN_MINUTES && store.once("tip:wind:" + Policy.nextStart(now, s).toLocalDate()))
             post(WIND_DOWN_ID, TIPS, "还有 " + minutes + " 分钟进入夜间守护", "把想做的事收个尾，该准备睡觉了。", Notification.CATEGORY_REMINDER);
         morning(store, s, now);
+        weekly(store, now);
+    }
+
+    /** Monday from 9:00, once: last week against the week before, nights, and the app used most. */
+    private void weekly(Store store, ZonedDateTime now) {
+        if (now.getDayOfWeek() != java.time.DayOfWeek.MONDAY || now.getHour() < 9) return;
+        List<Store.Day> days = store.days(15); // two full weeks before today, plus today
+        long last = 0, before = 0; int nLast = 0, nBefore = 0;
+        for (int i = 0; i < 14; i++) { Store.Day d = days.get(i); if (!d.recorded) continue; if (i >= 7) { last += d.useMs; nLast++; } else { before += d.useMs; nBefore++; } }
+        if (nLast < 4 || !store.once("tip:week:" + now.toLocalDate())) return;
+        double avg = (double) last / nLast; Integer change = nBefore >= 4 ? Policy.change((double) before / nBefore, avg) : null;
+        String title = change == null ? "上周日均用机 " + Policy.duration((long) avg)
+                : change <= 0 ? "上周日均 " + Policy.duration((long) avg) + "，比前一周少 " + (-change) + "%" : "上周日均 " + Policy.duration((long) avg) + "，比前一周多 " + change + "%";
+        StringBuilder text = new StringBuilder();
+        java.time.LocalDate[] dates = new java.time.LocalDate[7]; double[] rest = store.restHistory(7, dates); long sum = 0; int n = 0;
+        for (double r : rest) if (!Double.isNaN(r)) { sum += (long) r; n++; }
+        if (n > 0) text.append("夜里平均放下手机 ").append(Policy.duration(sum / n)).append("。");
+        java.util.Map<String, Long> apps = new java.util.HashMap<>();
+        for (int i = 1; i <= 7; i++) for (java.util.Map.Entry<String, Long> e : store.appTimes(now.toLocalDate().minusDays(i)).entrySet()) apps.merge(e.getKey(), e.getValue(), Long::sum);
+        apps.entrySet().stream().max(java.util.Map.Entry.comparingByValue()).ifPresent(top ->
+                text.append("用得最多的是").append(Apps.label(context, top.getKey())).append("，一周 ").append(Policy.duration(top.getValue())).append("。"));
+        text.append(change != null && change <= 0 ? "继续保持！" : "这周试试每天少用一点点。");
+        post(WEEK_ID, MORNING, title, text.toString(), Notification.CATEGORY_STATUS);
     }
 
     /** Gentle nudges by day: at 80% and 100% of the goal, and after 30 minutes of looking at the screen. */

@@ -21,7 +21,7 @@ public class MainActivity extends Activity {
     private TextView countdown, clock, phase, appSummary, badge, interceptionDetail, interceptionState;
     private BlueUi.NightBar bar;
     private BlueUi.Meter meter;
-    private TextView todayUsed, todayDetail;
+    private TextView todayUsed, todayDetail, focusLink;
     private boolean clockNight;
     private String target, reasonDraft = "", phraseDraft = "";
     private EditText reasonInput, phraseInput;
@@ -36,7 +36,7 @@ public class MainActivity extends Activity {
         if (state != null) { reasonDraft = state.getString("reasonDraft", ""); phraseDraft = state.getString("phraseDraft", ""); }
     }
     @Override public void onNewIntent(Intent intent) { super.onNewIntent(intent); setIntent(intent); reasonDraft = ""; phraseDraft = ""; reasonInput = null; phraseInput = null; render(); }
-    @Override public void onResume() { super.onResume(); render(); handler.removeCallbacks(timer); handler.post(timer); }
+    @Override public void onResume() { super.onResume(); render(); handler.removeCallbacks(timer); handler.post(timer); TodayWidget.update(this, store); }
     @Override public void onSaveInstanceState(Bundle state) { captureDraft(); state.putString("reasonDraft", reasonDraft); state.putString("phraseDraft", phraseDraft); super.onSaveInstanceState(state); }
     @Override public void onPause() { captureDraft(); handler.removeCallbacks(timer); super.onPause(); }
     @Override public void onDestroy() { loader.shutdownNow(); handler.removeCallbacks(timer); super.onDestroy(); }
@@ -69,7 +69,7 @@ public class MainActivity extends Activity {
 
     private void render() {
         BlueUi.use(this); Policy.Schedule schedule = store.schedule(); clockNight = store.night(); store.selected();
-        captureDraft(); reasonInput = null; phraseInput = null; countdown = null;
+        captureDraft(); reasonInput = null; phraseInput = null; countdown = null; todayUsed = null; focusLink = null;
         ScrollView scroll = new ScrollView(this); scroll.setFillViewport(true); scroll.setClipToPadding(false); BlueUi.page(this, scroll);
         root = BlueUi.column(this); root.setPadding(dp(22), dp(24), dp(22), dp(24)); scroll.addView(root); section = root;
 
@@ -79,7 +79,8 @@ public class MainActivity extends Activity {
         header.addView(titles, new LinearLayout.LayoutParams(0, -2, 1)); badge = BlueUi.pill(this, "", BlueUi.BLUE, BlueUi.PALE); header.addView(badge); root.addView(header);
 
         target = getIntent().getStringExtra("target"); if (target == null) target = store.p.getString("request", null);
-        if (target != null && (!clockNight || Apps.safe(this, target))) { if (!clockNight) store.cancelRequest(); getIntent().removeExtra("target"); target = null; }
+        // A request only makes sense while the app is actually stopped (night, focus or its daily limit).
+        if (target != null && (Apps.safe(this, target) || store.blockReason(target, store.selected()) == null)) { store.cancelRequest(); getIntent().removeExtra("target"); target = null; }
         if (target != null) renderUnlock();
 
         renderSetup();
@@ -175,13 +176,33 @@ public class MainActivity extends Activity {
         section.addView(big); BlueUi.gap(section, 12);
         meter = new BlueUi.Meter(this); section.addView(meter, new LinearLayout.LayoutParams(-1, dp(10))); BlueUi.gap(section, 10);
         todayDetail = BlueUi.label(this, "", 12, BlueUi.MUTED, false); section.addView(todayDetail);
-        if (!store.hasGoal()) { BlueUi.gap(section, 6); LinearLayout row = BlueUi.row(this); row.addView(BlueUi.link(this, "设定每日目标  →", this::chooseGoal)); section.addView(row); meter.setVisibility(View.GONE); }
-        else { BlueUi.gap(section, 6); LinearLayout row = BlueUi.row(this); row.addView(BlueUi.link(this, "调整目标", this::chooseGoal)); section.addView(row); }
+        Map<String, Long> apps = store.appTimes(LocalDate.now());
+        apps.entrySet().stream().max(Map.Entry.comparingByValue()).filter(e -> e.getValue() >= 60000).ifPresent(top -> {
+            BlueUi.gap(section, 6); section.addView(BlueUi.label(this, "用得最多：" + Apps.label(this, top.getKey()) + " " + Policy.duration(top.getValue()), 12, BlueUi.MUTED, false)); });
+        if (!store.hasGoal()) meter.setVisibility(View.GONE);
+        BlueUi.gap(section, 6); LinearLayout row = BlueUi.row(this);
+        row.addView(BlueUi.link(this, store.hasGoal() ? "调整目标" : "设定每日目标", this::chooseGoal));
+        focusLink = BlueUi.link(this, "", this::chooseFocus); row.addView(focusLink);
+        section.addView(row);
         refreshToday();
+    }
+
+    /** Focus: the restricted list is stopped for a while, by choice; it cannot be ended early. */
+    private void chooseFocus() {
+        if (store.focusing()) { Toast.makeText(this, "专注还剩 " + Policy.duration(store.focusRemainingMs()) + "，结束后自动解除", Toast.LENGTH_SHORT).show(); return; }
+        if (store.desired().isEmpty()) { Toast.makeText(this, "先在限制清单里选几个容易分心的应用", Toast.LENGTH_LONG).show(); startActivity(new Intent(this, AppPickerActivity.class)); return; }
+        int[] minutes = {25, 45, 60, 90}; String[] names = new String[minutes.length];
+        for (int i = 0; i < minutes.length; i++) names[i] = Policy.duration(minutes[i] * 60000L);
+        new AlertDialog.Builder(this).setTitle("专注多久？").setItems(names, (d, which) -> new AlertDialog.Builder(this)
+                .setTitle("专注 " + names[which])
+                .setMessage("这段时间里，限制清单中的 " + store.desired().size() + " 个应用都会被拦下，时间到自动解除，不能提前结束。电话、闹钟等始终可用。")
+                .setPositiveButton("开始专注", (d2, w2) -> { store.startFocus(minutes[which]); Toast.makeText(this, "开始专注，加油", Toast.LENGTH_SHORT).show(); render(); })
+                .setNegativeButton("再想想", null).show()).show();
     }
 
     private void refreshToday() {
         if (todayUsed == null) return;
+        if (focusLink != null) { boolean on = store.focusing(); focusLink.setText(on ? "专注中 · 还剩 " + Policy.duration(store.focusRemainingMs()) : "专注一下"); }
         Store.Day t = store.today(); int goal = store.goalMinutes(); long goalMs = goal * 60000L;
         todayUsed.setText(Policy.duration(t.useMs)); meter.set(t.useMs, goalMs);
         String picks = "拿起 " + t.pickups + " 次";

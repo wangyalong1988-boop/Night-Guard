@@ -16,6 +16,10 @@ final class BarChart extends View {
     private final Paint bar = new Paint(Paint.ANTI_ALIAS_FLAG), text = new Paint(Paint.ANTI_ALIAS_FLAG), line = new Paint(Paint.ANTI_ALIAS_FLAG);
     private double[] values = new double[0], goal; private String[] labels = new String[0]; private Format format;
     private int selected = -1, highlight = -1; private final float d;
+    private double reference = Double.NaN; private String referenceLabel;
+
+    /** A constant comparison line, drawn dotted in a quieter ink than the goal; NaN removes it. */
+    void reference(double value, String label) { reference = value; referenceLabel = label; invalidate(); }
 
     BarChart(Context c) {
         super(c); d = getResources().getDisplayMetrics().density;
@@ -57,6 +61,7 @@ final class BarChart extends View {
         double max = 0;
         for (double v : values) if (!Double.isNaN(v)) max = Math.max(max, v);
         if (goal != null) for (double g : goal) if (!Double.isNaN(g)) max = Math.max(max, g);
+        if (!Double.isNaN(reference)) max = Math.max(max, reference);
         double hour = 3600000, step = max <= 2 * hour ? hour / 2 : max <= 4 * hour ? hour : max <= 8 * hour ? 2 * hour : 3 * hour;
         if (max <= 0) max = 2 * hour;
         double top = Math.ceil(max / step) * step;
@@ -108,6 +113,17 @@ final class BarChart extends View {
             }
             c.drawPath(path, line); line.setPathEffect(null);
             if (lastX > 0) { text.setTextAlign(Paint.Align.RIGHT); text.setColor(BlueUi.INK); c.drawText("目标", lastX, lastY - 5 * d, text); }
+        }
+
+        if (!Double.isNaN(reference)) {
+            float y = (float) (b - Math.min(reference, top) / top * h);
+            line.setColor(BlueUi.MUTED); line.setStrokeWidth(1.5f * d); line.setStrokeCap(Paint.Cap.ROUND);
+            line.setPathEffect(new DashPathEffect(new float[]{0.1f, 4 * d}, 0)); // round dots, distinct from the dashed goal
+            c.drawLine(l, y, r, y, line); line.setPathEffect(null); line.setStrokeCap(Paint.Cap.BUTT);
+            text.setTextAlign(Paint.Align.LEFT); text.setColor(BlueUi.MUTED);
+            boolean nearGoal = false;
+            if (goal != null && n > 0 && !Double.isNaN(goal[n - 1])) nearGoal = Math.abs((float) (b - Math.min(goal[n - 1], top) / top * h) - y) < 14 * d;
+            c.drawText(referenceLabel + " " + format.value(reference), l + 4 * d, nearGoal ? y + 13 * d : y - 5 * d, text);
         }
 
         if (selected >= 0 && selected < n) tooltip(c, l + slot * (selected + 0.5f), t, selected);

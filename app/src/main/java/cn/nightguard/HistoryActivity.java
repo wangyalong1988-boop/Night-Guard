@@ -1,12 +1,16 @@
 package cn.nightguard;
 
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.os.Bundle;
 import android.view.Gravity;
+import android.view.View;
 import android.widget.*;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 
 /** Daily screen time and nightly rest over 7 or 30 days, with a short comparison to the period before. */
 public class HistoryActivity extends Activity {
@@ -48,7 +52,7 @@ public class HistoryActivity extends Activity {
         root.addView(tabs);
         LinearLayout body = BlueUi.column(this); body.setPadding(dp(10), 0, 0, 0); root.addView(body); root = body;
 
-        screenTime(); nights();
+        screenTime(); apps(); nights();
         TextView note = BlueUi.label(this, "只统计守护服务运行期间：从解锁屏幕到息屏算作使用，来通知亮屏不算。数据只存在这台手机里。", 11, BlueUi.MUTED, false);
         note.setPadding(dp(4), dp(16), dp(4), 0); root.addView(note);
     }
@@ -96,8 +100,55 @@ public class HistoryActivity extends Activity {
             public String axis(double v) { return hours(v); }
             public String title(int i) { return (i == span - 1 ? "今天 " : "") + dates[i].getMonthValue() + "月" + dates[i].getDayOfMonth() + "日 周" + WEEK[dates[i].getDayOfWeek().getValue() - 1]; }
         });
-        section.addView(chart, new LinearLayout.LayoutParams(-1, dp(190)));
-        BlueUi.gap(section, 6); section.addView(BlueUi.label(this, "点柱子查看当天数值" + (anyGoal ? "，虚线是每天的目标" : ""), 11, BlueUi.MUTED, false));
+        double ref = Policy.CNNIC_DAILY_MINUTES * 60000.0; chart.reference(ref, "全国网民平均");
+        section.addView(chart, new LinearLayout.LayoutParams(-1, dp(200)));
+        BlueUi.gap(section, 8);
+        section.addView(BlueUi.label(this, "点柱子查看当天数值。" + (anyGoal ? "虚线是每天的目标，" : "") + "点线是全国网民日均上网约 "
+                + Policy.duration((long) ref) + "（CNNIC 第57次报告，2025年12月，含电脑等所有设备）。", 11, BlueUi.MUTED, false));
+        if (n > 0) {
+            Integer vs = Policy.change(ref, (double) sum / n);
+            if (vs != null) { BlueUi.gap(section, 6); section.addView(BlueUi.label(this, "你的日均比全国网民平均" + (vs <= 0 ? "少 " + (-vs) + "%" : "多 " + vs + "%"), 12, vs <= 0 ? BlueUi.BLUE : BlueUi.INK, true)); }
+        }
+    }
+
+    /** Apps ranked by time over the period; tap one to set or change its daily limit. */
+    private void apps() {
+        Map<String, Long> totals = store.appTotals(span), today = store.appTimes(LocalDate.now()); Map<String, Integer> limits = store.desiredLimits();
+        List<Map.Entry<String, Long>> rows = new ArrayList<>(totals.entrySet()); rows.sort((a, b) -> Long.compare(b.getValue(), a.getValue()));
+        card();
+        section.addView(BlueUi.label(this, "按应用", 17, BlueUi.INK, true)); BlueUi.gap(section, 8);
+        if (rows.isEmpty()) { section.addView(BlueUi.label(this, "用一会儿手机后，这里会按应用列出用时。", 12, BlueUi.MUTED, false)); return; }
+        section.addView(BlueUi.label(this, "近 " + span + " 天日均用时。点应用设置每日限额：用满后白天也会拦下，放宽限额要到明天才生效。", 12, BlueUi.MUTED, false));
+        BlueUi.gap(section, 10);
+        long max = rows.get(0).getValue();
+        for (int i = 0; i < Math.min(8, rows.size()); i++) {
+            String pkg = rows.get(i).getKey(); long avg = rows.get(i).getValue() / span; Long now = today.get(pkg); Integer limit = limits.get(pkg); String name = Apps.label(this, pkg);
+            LinearLayout row = BlueUi.row(this); row.setPadding(0, dp(10), 0, dp(10)); row.setBackground(BlueUi.ripple(this, android.graphics.Color.TRANSPARENT, 10));
+            ImageView icon = new ImageView(this); icon.setImageDrawable(AppCatalog.icon(this, pkg)); icon.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+            row.addView(icon, new LinearLayout.LayoutParams(dp(32), dp(32)));
+            LinearLayout col = BlueUi.column(this); LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, -2, 1); lp.setMargins(dp(12), 0, dp(8), 0); row.addView(col, lp);
+            LinearLayout top = BlueUi.row(this); TextView label = BlueUi.label(this, name, 14, BlueUi.INK, true); label.setMaxLines(1); label.setEllipsize(android.text.TextUtils.TruncateAt.END);
+            top.addView(label, new LinearLayout.LayoutParams(0, -2, 1)); top.addView(BlueUi.label(this, "日均 " + Policy.duration(avg), 12, BlueUi.INK, false)); col.addView(top); BlueUi.gap(col, 6);
+            LinearLayout track = BlueUi.row(this); track.setBackground(BlueUi.background(this, BlueUi.LINE, 0, 3)); track.setWeightSum(1000);
+            View fill = new View(this); fill.setBackground(BlueUi.background(this, BlueUi.BLUE, 0, 3));
+            track.addView(fill, new LinearLayout.LayoutParams(0, dp(6), Math.max(12, rows.get(i).getValue() * 1000 / Math.max(1, max)))); col.addView(track, new LinearLayout.LayoutParams(-1, dp(6))); BlueUi.gap(col, 6);
+            col.addView(BlueUi.label(this, "今天 " + Policy.duration(now == null ? 0 : now) + (limit != null ? " · 限额 " + Policy.duration(limit * 60000L) : " · 点击设置限额"), 11, limit != null ? BlueUi.BLUE : BlueUi.MUTED, false));
+            row.setContentDescription(name + "，日均" + Policy.duration(avg) + (limit != null ? "，限额" + Policy.duration(limit * 60000L) : ""));
+            row.setOnClickListener(v -> chooseLimit(pkg, name, limit));
+            section.addView(row);
+        }
+    }
+
+    private void chooseLimit(String pkg, String name, Integer current) {
+        int[] options = {0, 15, 30, 45, 60, 90, 120}; String[] names = new String[options.length];
+        for (int i = 0; i < options.length; i++) names[i] = options[i] == 0 ? "不限" : "每天 " + Policy.duration(options[i] * 60000L);
+        int checked = 0; for (int i = 0; i < options.length; i++) if (current != null && options[i] == current) checked = i;
+        new AlertDialog.Builder(this).setTitle("“" + name + "”每天最多用多久？").setSingleChoiceItems(names, checked, (d, which) -> {
+            d.dismiss();
+            boolean now = store.setLimit(pkg, options[which]);
+            Toast.makeText(this, now ? (options[which] == 0 ? "已取消限额" : "已设为每天 " + Policy.duration(options[which] * 60000L)) : "放宽的限额明天生效，今天仍按原来的", Toast.LENGTH_LONG).show();
+            render();
+        }).setNegativeButton("取消", null).show();
     }
 
     private void nights() {
