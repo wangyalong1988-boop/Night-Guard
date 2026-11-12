@@ -34,7 +34,7 @@ public class InterfaceTest {
             capture("apps-all.png");
             scenario.onActivity(a->{View search=findDescription(a.getWindow().getDecorView(),"搜索应用");search.requestFocus();a.getSystemService(android.view.inputmethod.InputMethodManager.class).showSoftInput(search,android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT);});
             settle();Thread.sleep(500);
-            scenario.onActivity(a->{android.graphics.Rect bounds=new android.graphics.Rect();View save=findText(a.getWindow().getDecorView(),"保存限制清单");assertTrue("Save remains visible with keyboard",save.getGlobalVisibleRect(bounds)&&bounds.height()>0);ListView list=findList(a.getWindow().getDecorView());assertNotNull(list);assertTrue("Search results retain usable space",list.getHeight()>=BlueUi.dp(a,70));});
+            scenario.onActivity(a->{assertTrue("Software keyboard is actually visible",a.getWindow().getDecorView().getRootWindowInsets().isVisible(WindowInsets.Type.ime()));android.graphics.Rect bounds=new android.graphics.Rect();View save=findText(a.getWindow().getDecorView(),"保存限制清单");assertTrue("Save remains visible with keyboard",save.getGlobalVisibleRect(bounds)&&bounds.height()>0);ListView list=findList(a.getWindow().getDecorView());assertNotNull(list);assertTrue("Search results retain usable space",list.getHeight()>=BlueUi.dp(a,70));});
             capture("apps-keyboard.png");
             scenario.onActivity(a->a.getSystemService(android.view.inputmethod.InputMethodManager.class).hideSoftInputFromWindow(a.getWindow().getDecorView().getWindowToken(),0));
             settle();
