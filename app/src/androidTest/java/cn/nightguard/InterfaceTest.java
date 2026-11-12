@@ -32,6 +32,11 @@ public class InterfaceTest {
             scenario.onActivity(a->{new Store(a).p.edit().remove("apps").remove("pending").apply();a.showEntries(fixtures());});
             scenario.onActivity(a->{View title=findText(a.getWindow().getDecorView(),"限制应用");android.graphics.Rect bounds=new android.graphics.Rect();assertNotNull(title);assertTrue("Picker title is visible",title.getGlobalVisibleRect(bounds)&&bounds.width()>0);});
             capture("apps-all.png");
+            scenario.onActivity(a->{ListView list=findList(a.getWindow().getDecorView());list.setSelection(list.getCount()-1);});settle();
+            scenario.onActivity(a->{View browser=findDescriptionPrefix(a.getWindow().getDecorView(),"浏览器，");assertNotNull("Browser row is shown",browser);
+                browser.performClick();assertTrue("A browser can be ticked",a.selection.checked("fixture.browser"));
+                findDescriptionPrefix(a.getWindow().getDecorView(),"浏览器，").performClick();assertFalse("A wrongly detected browser can be unticked",a.selection.checked("fixture.browser"));});
+            scenario.onActivity(a->a.getWindow().getDecorView().post(()->findList(a.getWindow().getDecorView()).setSelection(0)));settle();
             int[] tap=new int[2];
             scenario.onActivity(a->{View search=findDescription(a.getWindow().getDecorView(),"搜索应用");android.graphics.Rect rect=new android.graphics.Rect();assertTrue(search.getGlobalVisibleRect(rect));tap[0]=rect.centerX();tap[1]=rect.centerY();});
             long eventTime=android.os.SystemClock.uptimeMillis();
@@ -47,12 +52,26 @@ public class InterfaceTest {
             settle();scenario.onActivity(a->{assertNotNull(findText(a.getWindow().getDecorView(),"云端视频"));View row=findDescriptionPrefix(a.getWindow().getDecorView(),"云端视频，");assertNotNull(row);row.performClick();assertTrue(a.selection.checked("fixture.video"));});
             capture("apps-search.png");
             scenario.onActivity(a->{((EditText)findDescription(a.getWindow().getDecorView(),"搜索应用")).setText("");findText(a.getWindow().getDecorView(),"只看已选").performClick();});
-            settle();scenario.onActivity(a->{assertNotNull(findText(a.getWindow().getDecorView(),"云端视频"));assertNull(findText(a.getWindow().getDecorView(),"轻音音乐"));findText(a.getWindow().getDecorView(),"清空结果").performClick();assertTrue(a.selection.checked("fixture.browser"));assertFalse(a.selection.checked("fixture.video"));});
-            scenario.onActivity(a->{findText(a.getWindow().getDecorView(),"✓ 只看已选").performClick();View chip=findText(a.getWindow().getDecorView(),"影音 2");assertNotNull(chip);chip.performClick();});
+            settle();scenario.onActivity(a->{assertNotNull(findText(a.getWindow().getDecorView(),"云端视频"));assertNull(findText(a.getWindow().getDecorView(),"轻音音乐"));findText(a.getWindow().getDecorView(),"清空结果").performClick();assertFalse(a.selection.checked("fixture.video"));});            scenario.onActivity(a->{findText(a.getWindow().getDecorView(),"✓ 只看已选").performClick();View chip=findText(a.getWindow().getDecorView(),"影音 2");assertNotNull(chip);chip.performClick();});
             settle();scenario.onActivity(a->{assertNotNull(findText(a.getWindow().getDecorView(),"轻音音乐"));assertNull(findText(a.getWindow().getDecorView(),"好友社交"));});
             capture("apps-media.png");
             scenario.onActivity(a->{findDescription(a.getWindow().getDecorView(),"调整云端视频分类").performClick();});
         }
+    }
+    @Test public void nightCoverIsRenderedAndCaptured() throws Exception {
+        try(ActivityScenario<MainActivity> scenario=ActivityScenario.launch(MainActivity.class)){
+            settle();
+            scenario.onActivity(a->{Drawable icon=fixtures().get(0).icon;NightCover cover=NightCover.build(a,"fixture.video",icon,"云端视频",Policy.DEFAULT,3,15,false,()->{},()->{});a.setContentView(cover.root);
+                assertNotNull(findText(cover.root,"云端视频 已经睡了"));assertNotNull(findText(cover.root,"今晚已帮你挡下 3 次"));});
+            capture("cover.png");
+        }
+    }
+    @Test public void homeFollowsDarkMode() throws Exception {
+        shell("cmd uimode night yes");
+        try(ActivityScenario<MainActivity> scenario=ActivityScenario.launch(MainActivity.class)){
+            settle();scenario.onActivity(a->{assertTrue("Dark palette is used",BlueUi.dark);assertNotNull(findText(a.getWindow().getDecorView(),"限制清单"));});
+            capture("home-dark.png");
+        } finally { shell("cmd uimode night no"); }
     }
     @Test public void pendingChoiceIsNotReplacedByActiveNightSelection(){
         Context c=InstrumentationRegistry.getInstrumentation().getTargetContext();Store store=new Store(c);

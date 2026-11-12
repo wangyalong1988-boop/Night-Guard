@@ -13,9 +13,10 @@ final class AppCategory {
         add(GAME,"com.tencent.tmgp.sgame","com.tencent.tmgp.pubgmhd","com.miHoYo.Yuanshen","com.miHoYo.hkrpg","com.supercell.clashofclans");
     }
     private static void add(String group,String... packages) { for(String pkg:packages)KNOWN.put(pkg,group); }
+    /** The user's own choice always wins, so a wrongly detected browser can be moved to another group. */
     static String classify(String pkg,int systemCategory,boolean browser,String override) {
+        if(override!=null&&CATEGORIES.contains(override))return override;
         if(browser)return BROWSER;
-        if(override!=null&&CATEGORIES.contains(override)&&!BROWSER.equals(override))return override;
         if(KNOWN.containsKey(pkg))return KNOWN.get(pkg);
         // Android ApplicationInfo category constants: game=0, audio=1, video=2, image=3.
         switch(systemCategory) {

@@ -4,15 +4,18 @@ import org.junit.Test;
 import static org.junit.Assert.*;
 
 public class AppCategoryTest {
-    @Test public void browserWinsOverManualAndSystemCategories(){assertEquals(AppCategory.BROWSER,AppCategory.classify("browser",0,true,AppCategory.SOCIAL));}
+    @Test public void detectedBrowserWinsOverSystemCategory(){assertEquals(AppCategory.BROWSER,AppCategory.classify("browser",0,true,null));}
+    @Test public void userCanCorrectAWrongBrowserGuess(){
+        assertEquals(AppCategory.TOOL,AppCategory.classify("office.app",-1,true,AppCategory.TOOL));
+        assertEquals(AppCategory.BROWSER,AppCategory.classify("missed.browser",-1,false,AppCategory.BROWSER));
+    }
     @Test public void knownAppsHaveUsefulCategories(){
         assertEquals(AppCategory.MEDIA,AppCategory.classify("tv.danmaku.bili",-1,false,null));
         assertEquals(AppCategory.SOCIAL,AppCategory.classify("com.tencent.mm",-1,false,null));
         assertEquals(AppCategory.GAME,AppCategory.classify("com.tencent.tmgp.sgame",-1,false,null));
     }
-    @Test public void overridesPersistWithoutTurningUnknownAppsIntoBrowsers(){
+    @Test public void overridesPersistAndInvalidOnesAreIgnored(){
         assertEquals(AppCategory.TOOL,AppCategory.classify("com.tencent.mm",4,false,AppCategory.TOOL));
-        assertEquals(AppCategory.OTHER,AppCategory.classify("unknown",-1,false,AppCategory.BROWSER));
         assertEquals(AppCategory.OTHER,AppCategory.classify("unknown",-1,false,"bad"));
     }
     @Test public void androidCategoryAndUnknownFallback(){
